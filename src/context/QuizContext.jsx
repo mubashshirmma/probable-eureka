@@ -1,49 +1,73 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useStudySet } from './StudySetContext';
+import {
+  clearQuizState,
+  emptyQuizState,
+  loadQuizState,
+  saveQuizState,
+  scoreQuiz,
+} from '../lib/quizSession';
 
 const QuizContext = createContext();
 
 export function QuizProvider({ children }) {
-  const { studySet } = useStudySet();
-  const [studentAnswers, setStudentAnswers] = useState({});
-  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const { studySet, sessionId } = useStudySet();
+  const questions = useMemo(() => studySet?.quiz?.questions || [], [studySet]);
 
-  const setAnswer = (questionId, optionIndex) => {
-    setStudentAnswers((prev) => ({
-      ...prev,
-      [questionId]: optionIndex,
-    }));
-  };
+  // Progress is tagged with the sessionId it belongs to. If the study session
+  // changes, the old progress is simply not used, so it can never leak into a
+  // new set (and nothing needs an effect to clear it).
+  const [saved, setSaved] = useState(() => loadQuizState(sessionStorage, sessionId, questions));
+  const state = saved.sessionId === sessionId ? saved : emptyQuizState(sessionId);
+
+  const update = useCallback(
+    (change) => {
+      setSaved((prev) => {
+        const base = prev.sessionId === sessionId ? prev : emptyQuizState(sessionId);
+        return { ...base, ...change(base) };
+      });
+    },
+    [sessionId]
+  );
+
+  // Save progress whenever it changes.
+  useEffect(() => {
+    if (sessionId && saved.sessionId === sessionId) saveQuizState(sessionStorage, saved);
+  }, [saved, sessionId]);
+
+  const setAnswer = (questionId, optionIndex) =>
+    update((s) => ({ answers: { ...s.answers, [questionId]: optionIndex } }));
+
+  const setQuizSubmitted = (submitted) => update(() => ({ submitted }));
+
+  const setCurrentIndex = (value) =>
+    update((s) => {
+      const next = typeof value === 'function' ? value(s.currentIndex) : value;
+      return { currentIndex: Math.min(Math.max(next, 0), Math.max(questions.length - 1, 0)) };
+    });
 
   const resetQuiz = () => {
-    setStudentAnswers({});
-    setQuizSubmitted(false);
+    clearQuizState(sessionStorage);
+    update(() => ({ answers: {}, submitted: false, currentIndex: 0 }));
   };
 
-  // A different study set means old answers no longer apply.
-  useEffect(() => {
-    setStudentAnswers({});
-    setQuizSubmitted(false);
-  }, [studySet]);
-
-  // Questions come from the active study set (generated or demo).
-  const questions = studySet?.quiz?.questions || [];
-  let correctCount = 0;
-  questions.forEach((q) => {
-    if (studentAnswers[q.id] === q.correctAnswer) {
-      correctCount++;
-    }
-  });
+  // Entry point for "Start Quiz": continue an unfinished attempt, or begin a new one after a finished attempt.
+  const startQuiz = () => {
+    if (state.submitted) resetQuiz();
+  };
 
   return (
     <QuizContext.Provider
       value={{
-        studentAnswers,
+        studentAnswers: state.answers,
         setAnswer,
         resetQuiz,
-        quizSubmitted,
+        startQuiz,
+        quizSubmitted: state.submitted,
         setQuizSubmitted,
-        score: correctCount,
+        currentIndex: state.currentIndex,
+        setCurrentIndex,
+        score: scoreQuiz(questions, state.answers),
         totalQuestions: questions.length,
         questions,
       }}

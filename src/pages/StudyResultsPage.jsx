@@ -5,6 +5,7 @@ import Sidebar from '../components/Sidebar';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { useStudySet } from '../context/StudySetContext';
+import { useQuiz } from '../context/QuizContext';
 
 export default function StudyResultsPage() {
   const [activeTab, setActiveTab] = useState('summary');
@@ -12,15 +13,16 @@ export default function StudyResultsPage() {
   const [isCardFlipped, setIsCardFlipped] = useState(false);
 
   const { studySet } = useStudySet();
+  const { startQuiz } = useQuiz();
 
   if (!studySet) {
     return (
-      <div className="bg-background font-body-md text-body-md text-on-surface flex flex-col min-h-screen">
+      <div className="font-body-md text-body-md text-on-surface flex flex-col min-h-screen">
         <Navbar subtitle="Study" />
-        <main className="flex-1 flex flex-col w-full pt-16 pb-24 bg-background">
-          <div className="flex flex-col w-full px-margin py-space-lg max-w-xl mx-auto">
+        <main className="flex-1 flex flex-col w-full pt-24 sm:pt-28 pb-32 md:pb-16">
+          <div className="flex flex-col w-full px-4 sm:px-6 py-6 max-w-xl md:max-w-3xl mx-auto">
             <Card className="flex flex-col items-center text-center gap-space-sm">
-              <span className="material-symbols-outlined text-[40px] text-secondary">menu_book</span>
+              <span className="neu-icon neu-icon--lg !w-16 !h-16 !rounded-3xl"><span className="material-symbols-outlined text-[34px]" aria-hidden="true">menu_book</span></span>
               <h1 className="font-headline-sm text-headline-sm text-primary font-bold">
                 No study set yet
               </h1>
@@ -53,15 +55,15 @@ export default function StudyResultsPage() {
   };
 
   return (
-    <div className="bg-background font-body-md text-body-md text-on-surface flex flex-col min-h-screen">
+    <div className="font-body-md text-body-md text-on-surface flex flex-col min-h-screen">
       <Navbar subtitle="Study" />
 
-      <main className="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-background">
-        <div className="flex flex-col w-full px-margin max-w-xl mx-auto pb-space-lg">
+      <main className="flex-1 flex flex-col relative w-full pt-24 sm:pt-28 pb-32 md:pb-16">
+        <div className="flex flex-col w-full px-4 sm:px-6 max-w-xl md:max-w-3xl lg:max-w-6xl mx-auto">
           {/* Topic Header Area */}
-          <header className="pt-space-md pb-space-sm flex flex-col gap-space-xs">
+          <header className="pb-space-sm flex flex-col gap-space-xs rise">
             <div className="flex items-center justify-between gap-space-sm">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-sm text-label-sm shadow-sm">
+              <span className="pill pill--gold px-3 py-1.5 font-label-sm text-label-sm font-semibold">
                 <span
                   className="material-symbols-outlined text-[15px] text-on-tertiary-container"
                   style={{ fontVariationSettings: "'FILL' 1" }}
@@ -70,7 +72,7 @@ export default function StudyResultsPage() {
                 </span>
                 {gradeSubject}
               </span>
-              <div className="flex items-center gap-1 text-on-surface-variant font-label-md text-label-md bg-surface-container px-2.5 py-0.5 rounded-full">
+              <div className="pill px-3 py-1.5 text-on-surface-variant font-label-md text-label-md">
                 <span className="material-symbols-outlined text-[16px] text-secondary">
                   verified
                 </span>
@@ -79,12 +81,12 @@ export default function StudyResultsPage() {
             </div>
 
             <div className="flex items-center justify-between mt-space-xs">
-              <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-primary tracking-tight font-bold">
+              <h1 className="font-headline-lg-mobile text-headline-lg-mobile lg:font-headline-lg lg:text-headline-lg text-primary tracking-tight font-bold">
                 {topicTitle}
               </h1>
               <button
                 aria-label="Bookmark Topic"
-                className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary hover:bg-surface-variant transition-colors"
+                className="neu-icon neu-icon--round !text-primary"
                 type="button"
                 onClick={() => alert('Topic bookmarked for quick revision!')}
               >
@@ -101,16 +103,13 @@ export default function StudyResultsPage() {
           {/* Segmented Control Navigation Tabs */}
           <nav
             aria-label="Study Mode Selection"
-            className="my-space-md p-1.5 bg-surface-container rounded-full flex items-center gap-1 shadow-sm"
+            className="segmented my-5 max-w-xl w-full mx-auto"
           >
             <button
               type="button"
               onClick={() => setActiveTab('summary')}
-              className={`flex-1 py-2 rounded-full font-label-md text-label-md transition-all duration-200 flex items-center justify-center gap-1.5 ${
-                activeTab === 'summary'
-                  ? 'bg-secondary text-on-secondary shadow-md font-semibold'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              }`}
+              aria-current={activeTab === 'summary' ? 'true' : undefined}
+              className="segmented__item font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-[18px]">menu_book</span>
               <span>Summary</span>
@@ -119,11 +118,8 @@ export default function StudyResultsPage() {
             <button
               type="button"
               onClick={() => setActiveTab('flashcards')}
-              className={`flex-1 py-2 rounded-full font-label-md text-label-md transition-all duration-200 flex items-center justify-center gap-1.5 ${
-                activeTab === 'flashcards'
-                  ? 'bg-secondary text-on-secondary shadow-md font-semibold'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              }`}
+              aria-current={activeTab === 'flashcards' ? 'true' : undefined}
+              className="segmented__item font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-[18px]">style</span>
               <span>Flashcards</span>
@@ -132,11 +128,8 @@ export default function StudyResultsPage() {
             <button
               type="button"
               onClick={() => setActiveTab('quiz')}
-              className={`flex-1 py-2 rounded-full font-label-md text-label-md transition-all duration-200 flex items-center justify-center gap-1.5 ${
-                activeTab === 'quiz'
-                  ? 'bg-secondary text-on-secondary shadow-md font-semibold'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              }`}
+              aria-current={activeTab === 'quiz' ? 'true' : undefined}
+              className="segmented__item font-label-lg text-label-lg"
             >
               <span className="material-symbols-outlined text-[18px]">quiz</span>
               <span>Quiz</span>
@@ -145,9 +138,9 @@ export default function StudyResultsPage() {
 
           {/* TAB 1: SUMMARY CONTENT */}
           {activeTab === 'summary' && (
-            <section className="flex flex-col gap-space-md">
+            <section className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-start rise">
               {/* Quick Summary Card */}
-              <Card className="flex flex-col gap-space-sm relative overflow-hidden">
+              <Card className="flex flex-col gap-space-sm relative overflow-hidden lg:col-span-5 lg:sticky lg:top-28">
                 <div className="flex items-center gap-2 text-secondary font-label-lg text-label-lg font-bold">
                   <span className="material-symbols-outlined text-[20px]">bolt</span>
                   <h2>Quick Summary</h2>
@@ -157,14 +150,14 @@ export default function StudyResultsPage() {
                 </p>
 
                 {/* Visual Hierarchy Diagram */}
-                <div className="mt-space-xs p-space-sm bg-surface-container-low rounded-lg flex items-center justify-between gap-1 overflow-x-auto">
+                <div className="mt-space-xs p-3 neu-well flex items-center justify-between gap-1.5 overflow-x-auto">
                   {summary.hierarchy.map((item, index) => (
                     <React.Fragment key={item.symbol}>
                       <div
-                        className={`flex flex-col items-center p-2 rounded shadow-sm flex-1 min-w-[64px] ${
+                        className={`flex flex-col items-center p-2.5 rounded-xl flex-1 min-w-[64px] ${
                           item.highlight
-                            ? 'bg-secondary-fixed text-on-secondary-fixed-variant'
-                            : 'bg-surface-container-lowest'
+                            ? 'bg-secondary-fixed text-on-secondary-fixed-variant shadow-[0_6px_14px_-6px_rgba(61,85,240,0.5)] ring-1 ring-secondary/30'
+                            : 'neu-raised neu-raised--sm'
                         }`}
                       >
                         <span className="font-headline-sm text-headline-sm text-secondary font-bold">
@@ -185,12 +178,12 @@ export default function StudyResultsPage() {
               </Card>
 
               {/* Key Concepts List */}
-              <div className="flex flex-col gap-space-sm">
+              <div className="flex flex-col gap-space-sm lg:col-span-7">
                 <div className="flex items-center justify-between px-1">
                   <h2 className="font-headline-sm text-headline-sm text-primary font-bold">
                     Key Concepts
                   </h2>
-                  <span className="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full font-medium">
+                  <span className="pill px-2.5 py-1 font-label-sm text-label-sm text-on-surface-variant font-semibold">
                     {summary.keyConcepts.length} Core Rules
                   </span>
                 </div>
@@ -200,10 +193,8 @@ export default function StudyResultsPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span
-                          className={`w-7 h-7 rounded-full flex items-center justify-center font-label-md text-label-md font-bold ${
-                            concept.isHighlight
-                              ? 'bg-tertiary-fixed text-on-tertiary-fixed'
-                              : 'bg-secondary-fixed text-on-secondary-fixed-variant'
+                          className={`neu-icon neu-icon--round neu-icon--sm font-label-md text-label-md font-bold ${
+                            concept.isHighlight ? '!text-on-tertiary-fixed-variant' : ''
                           }`}
                         >
                           {concept.symbol}
@@ -213,10 +204,8 @@ export default function StudyResultsPage() {
                         </h3>
                       </div>
                       <span
-                        className={`px-2 py-0.5 rounded-full font-label-sm text-label-sm ${
-                          concept.isHighlight
-                            ? 'bg-tertiary-fixed text-on-tertiary-fixed-variant font-semibold'
-                            : 'bg-surface-container text-on-surface-variant'
+                        className={`pill px-2.5 py-0.5 font-label-sm text-label-sm shrink-0 ${
+                          concept.isHighlight ? 'pill--gold font-semibold' : 'text-on-surface-variant'
                         }`}
                       >
                         {concept.badge}
@@ -227,12 +216,12 @@ export default function StudyResultsPage() {
                       {concept.description}
                     </p>
 
-                    <div className="bg-surface-container-low px-space-sm py-1.5 rounded-lg font-mono text-body-sm text-primary font-semibold tracking-wide">
+                    <div className="neu-well !rounded-xl px-3 py-2 font-mono text-body-sm text-primary font-semibold tracking-wide overflow-x-auto">
                       {concept.code}
                     </div>
 
                     {concept.tip && (
-                      <div className="mt-1 p-2 rounded-lg bg-surface-container flex items-center gap-2 text-on-surface">
+                      <div className="mt-1 p-2.5 glass-panel flex items-center gap-2 text-on-surface">
                         <span
                           className="material-symbols-outlined text-[18px] text-tertiary-container"
                           style={{ fontVariationSettings: "'FILL' 1" }}
@@ -252,7 +241,7 @@ export default function StudyResultsPage() {
               <Button
                 variant="secondary"
                 size="md"
-                className="w-full mt-space-xs"
+                className="w-full lg:w-auto lg:col-span-12 lg:justify-self-start"
                 iconRight="arrow_forward"
                 onClick={() => setActiveTab('flashcards')}
               >
@@ -263,7 +252,7 @@ export default function StudyResultsPage() {
 
           {/* TAB 2: FLASHCARDS SECTION */}
           {activeTab === 'flashcards' && (
-            <section className="flex flex-col gap-space-md">
+            <section className="flex flex-col gap-space-md w-full max-w-2xl mx-auto rise">
               {/* Active Card Counter */}
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
@@ -274,16 +263,16 @@ export default function StudyResultsPage() {
                 </div>
 
                 {/* Progress Indicators */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1" aria-hidden="true">
                   {flashcards.map((_, idx) => (
                     <span
                       key={idx}
-                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                      className={`h-1.5 rounded-full transition-all duration-500 ${
                         idx === currentCardIndex
-                          ? 'w-6 bg-secondary'
+                          ? 'w-7 bg-gradient-to-r from-secondary to-[#7a62d6]'
                           : idx < currentCardIndex
-                          ? 'w-3 bg-secondary-fixed'
-                          : 'w-3 bg-surface-container-high'
+                          ? 'w-3 bg-secondary/40'
+                          : 'w-3 bg-surface-container-highest'
                       }`}
                     ></span>
                   ))}
@@ -291,9 +280,11 @@ export default function StudyResultsPage() {
               </div>
 
               {/* Interactive Flashcard */}
-              <div
+              <Card
                 onClick={() => setIsCardFlipped(!isCardFlipped)}
-                className="cursor-pointer bg-surface-container-lowest rounded-xl p-space-lg shadow-md min-h-[240px] flex flex-col justify-between items-center text-center relative transition-all duration-300 active:scale-[0.99] select-none border border-outline/10 hover:border-secondary/30"
+                aria-pressed={isCardFlipped}
+                aria-label={isCardFlipped ? 'Flashcard, answer shown. Press to see the question.' : 'Flashcard, question shown. Press to reveal the answer.'}
+                className="!p-6 sm:!p-8 min-h-[280px] flex flex-col justify-between items-center text-center select-none"
               >
                 {/* Header Tag */}
                 <div className="flex items-center justify-between w-full">
@@ -306,14 +297,14 @@ export default function StudyResultsPage() {
                 </div>
 
                 {/* Card Body: Question or Answer */}
-                <div className="py-space-md w-full flex flex-col items-center justify-center">
+                <div key={`${currentCardIndex}-${isCardFlipped}`} className="flip-in py-space-md w-full flex flex-col items-center justify-center">
                   {!isCardFlipped ? (
-                    <p className="font-headline-md-mobile text-headline-md-mobile text-primary font-semibold leading-relaxed">
+                    <p className="font-headline-md-mobile text-headline-md-mobile sm:font-headline-md sm:text-headline-md text-primary font-semibold leading-relaxed">
                       {currentFlashcard.question}
                     </p>
                   ) : (
                     <div className="flex flex-col items-center gap-space-xs">
-                      <span className="px-2.5 py-0.5 rounded-full bg-surface-container text-secondary font-label-sm text-label-sm font-semibold mb-1">
+                      <span className="pill pill--accent px-3 py-1 font-label-sm text-label-sm font-semibold mb-1">
                         Answer Revealed
                       </span>
                       <p className="font-body-lg text-body-lg text-on-surface leading-relaxed">
@@ -332,7 +323,7 @@ export default function StudyResultsPage() {
                     {isCardFlipped ? 'Tap card to view question' : 'Tap card to flip and view explanation'}
                   </span>
                 </div>
-              </div>
+              </Card>
 
               {/* Flashcard Controls */}
               <div className="flex items-center gap-space-sm mt-space-xs">
@@ -357,7 +348,7 @@ export default function StudyResultsPage() {
               </div>
 
               {/* Active Recall Tip */}
-              <div className="bg-surface-container rounded-xl p-space-md flex items-center gap-space-sm text-on-surface">
+              <div className="glass glass--soft p-4 flex items-center gap-space-sm text-on-surface">
                 <span
                   className="material-symbols-outlined text-[24px] text-secondary"
                   style={{ fontVariationSettings: "'FILL' 1" }}
@@ -378,7 +369,7 @@ export default function StudyResultsPage() {
 
           {/* TAB 3: QUIZ PREVIEW */}
           {activeTab === 'quiz' && (
-            <section className="flex flex-col gap-space-md">
+            <section className="flex flex-col gap-space-md w-full max-w-2xl mx-auto rise">
               {/* Quiz Header Banner Card */}
               <Card className="flex flex-col gap-space-md">
                 <div className="flex items-start justify-between">
@@ -391,10 +382,10 @@ export default function StudyResultsPage() {
                       Practice MCQ Quiz
                     </h2>
                     <p className="font-body-sm text-body-sm text-on-surface-variant">
-                      Test your conceptual retention across decimals, primes, and real subsets.
+                      Check how much of this study set you remember. You get instant feedback and an explanation for every answer.
                     </p>
                   </div>
-                  <div className="w-12 h-12 rounded-xl bg-secondary-fixed text-on-secondary-fixed-variant flex items-center justify-center shadow-inner">
+                  <div className="neu-icon neu-icon--lg">
                     <span className="material-symbols-outlined text-[28px] text-secondary">
                       assignment
                     </span>
@@ -402,7 +393,7 @@ export default function StudyResultsPage() {
                 </div>
 
                 {/* Quiz Specifications Grid */}
-                <div className="grid grid-cols-3 gap-2 p-space-sm bg-surface-container-low rounded-lg text-center">
+                <div className="grid grid-cols-3 gap-2 p-4 neu-well text-center">
                   <div className="flex flex-col">
                     <span className="font-label-sm text-label-sm text-on-surface-variant">
                       Length
@@ -438,7 +429,7 @@ export default function StudyResultsPage() {
                     {quiz.coveredConcepts.map((c) => (
                       <span
                         key={c}
-                        className="px-2.5 py-1 rounded-full bg-surface-container text-on-surface font-label-sm text-label-sm"
+                        className="pill px-3 py-1 text-on-surface font-label-sm text-label-sm"
                       >
                         {c}
                       </span>
@@ -449,6 +440,7 @@ export default function StudyResultsPage() {
                 {/* Start Quiz Action */}
                 <Button
                   to="/quiz"
+                  onClick={startQuiz}
                   variant="primary"
                   size="lg"
                   icon="play_arrow"
@@ -459,9 +451,9 @@ export default function StudyResultsPage() {
               </Card>
 
               {/* Target Accuracy Benchmark */}
-              <div className="bg-surface-container rounded-xl p-space-md flex items-center justify-between">
+              <div className="glass glass--soft p-4 flex items-center justify-between">
                 <div className="flex items-center gap-space-sm">
-                  <div className="w-10 h-10 rounded-full bg-tertiary-fixed text-on-tertiary-fixed flex items-center justify-center">
+                  <div className="neu-icon neu-icon--round !text-tertiary-container">
                     <span className="material-symbols-outlined text-[20px]">
                       military_tech
                     </span>

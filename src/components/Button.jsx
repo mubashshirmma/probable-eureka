@@ -1,9 +1,25 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
+const VARIANTS = {
+  primary: 'neu-btn--primary',
+  secondary: '',
+  subtle: 'neu-btn--subtle',
+  dark: 'neu-btn--dark',
+  outline: 'neu-btn--outline',
+  ghost: 'neu-btn--ghost',
+};
+
+const SIZES = {
+  sm: 'px-3.5 py-1.5 text-label-md rounded-lg gap-1.5 min-h-[40px]',
+  md: 'px-5 py-2.5 text-label-lg rounded-xl gap-2 min-h-[44px]',
+  lg: 'px-5 sm:px-6 py-3.5 text-title-md rounded-xl gap-2.5 min-h-[52px]',
+};
+
 export default function Button({
   children,
   to,
+  href,
   variant = 'primary',
   size = 'md',
   className = '',
@@ -12,51 +28,52 @@ export default function Button({
   onClick,
   type = 'button',
   disabled = false,
+  loading = false,
   ...props
 }) {
-  const baseClasses =
-    'inline-flex items-center justify-center font-medium rounded-xl transition-all select-none';
-
-  const variants = {
-    primary:
-      'bg-secondary hover:bg-secondary-container text-on-secondary shadow-md active:scale-[0.98]',
-    secondary:
-      'bg-surface-container hover:bg-surface-container-high text-primary shadow-sm active:scale-[0.98]',
-    subtle:
-      'bg-surface-container-low hover:bg-surface-container text-primary active:scale-[0.98]',
-    dark:
-      'bg-primary hover:bg-primary-container text-on-primary shadow-md active:scale-[0.98]',
-    outline:
-      'border border-outline/20 text-primary hover:bg-surface-container-low active:scale-[0.98]',
-    ghost:
-      'text-on-surface-variant hover:text-primary hover:bg-surface-container-high active:scale-[0.98]',
-  };
-
-  const sizes = {
-    sm: 'px-3 py-1.5 text-label-md rounded-lg gap-1.5 min-h-[36px]',
-    md: 'px-4 py-2.5 text-label-lg rounded-lg gap-2 min-h-[42px]',
-    lg: 'px-6 py-4 text-title-md rounded-xl gap-2.5 min-h-[50px]',
-  };
-
-  const combinedClasses = `${baseClasses} ${variants[variant] || variants.primary} ${sizes[size] || sizes.md} ${
-    disabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''
-  } ${className}`;
+  const isDisabled = disabled || loading;
+  const classes = [
+    'neu-btn inline-flex items-center justify-center select-none whitespace-nowrap',
+    VARIANTS[variant] ?? VARIANTS.primary,
+    SIZES[size] || SIZES.md,
+    loading ? 'is-loading' : '',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   const content = (
     <>
-      {icon && (
-        <span className="material-symbols-outlined text-[20px]">{icon}</span>
+      {loading ? (
+        <span className="spinner" aria-hidden="true" />
+      ) : (
+        icon && <span className="material-symbols-outlined text-[20px]" aria-hidden="true">{icon}</span>
       )}
       {children}
-      {iconRight && (
-        <span className="material-symbols-outlined text-[20px]">{iconRight}</span>
+      {iconRight && !loading && (
+        <span className="material-symbols-outlined text-[20px]" aria-hidden="true">{iconRight}</span>
       )}
     </>
   );
 
+  if (href) {
+    return (
+      <a href={href} className={classes} onClick={onClick} {...props}>
+        {content}
+      </a>
+    );
+  }
+
   if (to) {
     return (
-      <Link to={to} className={combinedClasses} onClick={onClick} {...props}>
+      <Link
+        to={to}
+        className={classes}
+        onClick={isDisabled ? (e) => e.preventDefault() : onClick}
+        aria-disabled={isDisabled || undefined}
+        tabIndex={isDisabled ? -1 : undefined}
+        {...props}
+      >
         {content}
       </Link>
     );
@@ -65,13 +82,13 @@ export default function Button({
   return (
     <button
       type={type}
-      className={combinedClasses}
+      className={classes}
       onClick={onClick}
-      disabled={disabled}
+      disabled={isDisabled}
+      aria-busy={loading || undefined}
       {...props}
     >
       {content}
     </button>
   );
 }
-

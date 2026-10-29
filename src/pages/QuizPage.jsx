@@ -4,14 +4,14 @@ import { useQuiz } from '../context/QuizContext';
 import { useStudySet } from '../context/StudySetContext';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import FocusHeader from '../components/FocusHeader';
 
 export default function QuizPage() {
   const navigate = useNavigate();
-  const { questions, studentAnswers, setAnswer, setQuizSubmitted } = useQuiz();
+  const { questions, studentAnswers, setAnswer, setQuizSubmitted, currentIndex, setCurrentIndex } = useQuiz();
 
   const { studySet } = useStudySet();
 
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState((studySet?.quiz?.timeLimitMinutes || 15) * 60); // seconds
 
   // Safe check if questions are missing
@@ -70,117 +70,99 @@ export default function QuizPage() {
   const optionLetters = ['A', 'B', 'C', 'D'];
 
   return (
-    <div className="bg-background font-body-md text-body-md text-on-surface flex flex-col min-h-screen">
-      {/* Header Bar */}
-      <header className="fixed top-0 w-full z-50 pt-safe bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
-        <div className="h-16 px-margin flex items-center justify-between gap-space-sm max-w-xl mx-auto">
-          <div className="flex items-center gap-space-sm min-w-0">
-            <button
-              type="button"
-              onClick={handleExitQuiz}
-              aria-label="Go Back"
-              className="w-11 h-11 flex items-center justify-center -ml-2 rounded-full text-on-surface hover:bg-surface-container-high transition-colors"
-            >
-              <span className="material-symbols-outlined text-[24px]">arrow_back</span>
-            </button>
-            <img
-              alt="StudySaathi AI Logo"
-              className="h-7 w-auto object-contain flex-shrink-0"
-              src="https://lh3.googleusercontent.com/aida/AEtjO1U5Hn00h2H0TL7BbCuRbZgZBFHrg8f0KkPf8JVr28GieRip7ub7II3vWQR36WFgGfUFTn8E8mGIE6EGxq57n1209T_CFsM9Nql89um3TW34cRO0lZEgKPRgudDCKPc1F1nwdj3wC7fiT9XMzMj-7MIb7dLXZIBu6u_MHqcxiWiPJYWqWZkQmpAqSXWOl4sH_GwcyfbsdnA6d0xdmfuqCwI-Xj6rqoQjXZFvQyBzl30r"
-            />
-            <h1 className="font-headline-sm text-headline-sm text-primary tracking-tight truncate font-bold">
-              Active Quiz Session
-            </h1>
-          </div>
-
-          <div className="flex items-center">
-            <button
-              type="button"
-              onClick={handleExitQuiz}
-              className="flex items-center gap-1 px-3 py-1 rounded-full bg-error-container text-on-error-container font-label-md text-label-md shadow-sm active:scale-95 transition-transform"
-            >
-              <span className="material-symbols-outlined text-[16px]">close</span>
-              <span>Exit</span>
-            </button>
-          </div>
-        </div>
-      </header>
+    <div className="font-body-md text-body-md text-on-surface flex flex-col min-h-screen">
+      <FocusHeader
+        title="Active Quiz Session"
+        onBack={handleExitQuiz}
+        backLabel="Go back"
+        action={
+          <button
+            type="button"
+            onClick={handleExitQuiz}
+            className="neu-btn flex items-center gap-1 px-3.5 py-2 min-h-[40px] rounded-xl font-label-md text-label-md !text-error"
+          >
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+            <span>Exit</span>
+          </button>
+        }
+      />
 
       {/* Main Quiz Content */}
-      <main className="flex-1 flex flex-col relative w-full pt-16 pb-20 bg-background">
-        <div className="flex flex-col w-full px-margin py-space-md max-w-xl mx-auto gap-space-md">
+      <main className="flex-1 flex flex-col relative w-full pt-24 pb-16">
+        <div className="flex flex-col w-full px-4 sm:px-6 max-w-xl md:max-w-2xl mx-auto gap-5">
           {/* Top Session Bar */}
-          <div className="flex items-center justify-between pt-space-xs">
-            <div className="flex items-center gap-space-xs">
+          <div className="flex items-center justify-between gap-3 rise">
+            <div className="flex items-center gap-space-xs min-w-0">
               <span
                 className="material-symbols-outlined text-secondary text-[20px]"
                 style={{ fontVariationSettings: "'FILL' 1" }}
+                aria-hidden="true"
               >
                 psychology
               </span>
-              <span className="font-label-md text-label-md text-primary tracking-wide uppercase font-semibold">
+              <span className="font-label-md text-label-md text-primary tracking-wide uppercase font-semibold truncate">
                 Live Practice Session
               </span>
             </div>
-            <div className="flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-md text-label-md shadow-sm">
-              <span className="material-symbols-outlined text-[16px] text-tertiary-container animate-pulse">
-                timer
-              </span>
-              <span className="font-semibold tracking-tight">{formattedTime} left</span>
+            <div className="pill pill--gold px-3 py-1.5 font-label-md text-label-md shrink-0" role="timer" aria-label={`${formattedTime} left`}>
+              <span className="material-symbols-outlined text-[16px]" aria-hidden="true">timer</span>
+              <span className="font-semibold tracking-tight tabular-nums">{formattedTime} left</span>
             </div>
           </div>
 
-          {/* Progress Tracker Banner */}
-          <Card className="flex flex-col gap-space-sm">
-            <div className="flex items-center justify-between">
-              <div>
+          {/* Progress Tracker */}
+          <Card className="flex flex-col gap-space-sm rise" style={{ '--i': 1 }}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
                 <span className="font-headline-sm text-headline-sm text-primary-container font-bold">
                   Question {currentIndex + 1} of {questions.length}
                 </span>
-                <p className="font-label-sm text-label-sm text-on-surface-variant">
+                <p className="font-label-sm text-label-sm text-on-surface-variant truncate">
                   {studySet?.topicTitle}
                 </p>
               </div>
+              <span className="font-headline-sm text-headline-sm text-secondary font-bold tabular-nums">
+                {Math.round(((currentIndex + 1) / questions.length) * 100)}%
+              </span>
             </div>
 
-            {/* Progress Bar */}
-            <div className="w-full bg-surface-container rounded-full h-2 overflow-hidden flex">
-              <div
-                className="bg-secondary-container h-full transition-all duration-300 rounded-full"
-                style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
-              ></div>
+            <div
+              className="progress-track"
+              role="progressbar"
+              aria-label="Quiz progress"
+              aria-valuemin={1}
+              aria-valuemax={questions.length}
+              aria-valuenow={currentIndex + 1}
+            >
+              <div className="progress-fill" style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}></div>
             </div>
 
             <div className="flex items-center justify-between text-on-surface-variant font-label-sm text-label-sm pt-0.5">
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-secondary"></span>
                 {attemptedCount} Attempted
               </span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-surface-container-highest"></span>
                 {leftCount} Left
               </span>
             </div>
           </Card>
 
-          {/* Active Question Container */}
-          <Card className="flex flex-col gap-space-md">
-            {/* Category & Difficulty Pill */}
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-high text-primary font-label-md text-label-md">
-                <span className="material-symbols-outlined text-[16px] text-secondary">
-                  topic
-                </span>
-                {currentQuestion.topic || 'General'}
+          {/* Active Question */}
+          <Card key={currentQuestion.id} className="flex flex-col gap-space-md rise">
+            <div className="flex items-center justify-between gap-3">
+              <span className="pill px-3 py-1.5 text-primary font-label-md text-label-md min-w-0">
+                <span className="material-symbols-outlined text-[16px] text-secondary" aria-hidden="true">topic</span>
+                <span className="truncate">{currentQuestion.topic || 'General'}</span>
               </span>
-              <span className="font-label-sm text-label-sm text-secondary font-semibold bg-secondary-fixed px-2 py-0.5 rounded-full">
+              <span className="pill pill--accent px-3 py-1 font-label-sm text-label-sm font-semibold shrink-0">
                 Single Choice
               </span>
             </div>
 
-            {/* Question Text */}
             <div>
-              <h2 className="font-headline-sm text-headline-sm text-primary-container leading-snug font-bold">
+              <h2 className="font-headline-sm text-headline-sm sm:font-headline-md sm:text-headline-md text-primary-container leading-snug font-bold">
                 {currentQuestion.question}
               </h2>
               {currentQuestion.subtitle && (
@@ -190,64 +172,59 @@ export default function QuizPage() {
               )}
             </div>
 
-            {/* Options Stack */}
-            <fieldset className="flex flex-col gap-space-sm">
-              <legend className="sr-only">Answer Options</legend>
+            {/* Options: real radio buttons, so the keyboard and screen readers work */}
+            <fieldset className="flex flex-col gap-3.5">
+              <legend className="sr-only">Answer options for question {currentIndex + 1}</legend>
               {currentQuestion.options.map((option, idx) => {
                 const isCurrentSelected = studentAnswers[currentQuestion.id] === idx;
 
                 return (
-                  <label
-                    key={idx}
-                    onClick={() => handleOptionSelect(idx)}
-                    className={`group relative flex items-center justify-between p-space-md rounded-xl cursor-pointer transition-all duration-200 active:scale-[0.99] border ${
-                      isCurrentSelected
-                        ? 'bg-secondary-fixed text-primary border-secondary/40 shadow-sm'
-                        : 'bg-surface-container-low text-on-surface border-transparent hover:bg-surface-container'
-                    }`}
-                  >
-                    <div className="flex items-center gap-space-sm min-w-0 pr-2">
+                  <label key={idx} className={`option ${isCurrentSelected ? 'is-selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name={`question-${currentQuestion.id}`}
+                      className="sr-only"
+                      checked={isCurrentSelected}
+                      onChange={() => handleOptionSelect(idx)}
+                    />
+                    <span className="flex items-center gap-space-sm min-w-0">
                       <span
-                        className={`w-7 h-7 rounded-full flex items-center justify-center font-label-md text-label-md font-bold shrink-0 transition-colors ${
+                        className={`w-8 h-8 rounded-full flex items-center justify-center font-label-md text-label-md font-bold shrink-0 transition-colors ${
                           isCurrentSelected
-                            ? 'bg-secondary text-on-secondary shadow-sm'
-                            : 'bg-surface-container-highest text-primary'
+                            ? 'bg-secondary text-on-secondary shadow-md'
+                            : 'neu-raised neu-raised--sm !rounded-full text-primary'
                         }`}
+                        aria-hidden="true"
                       >
                         {optionLetters[idx]}
                       </span>
-                      <span className="font-body-md text-body-md leading-snug font-medium">
+                      <span className="font-body-md text-body-md leading-snug font-medium break-words min-w-0">
                         {option}
                       </span>
-                    </div>
+                    </span>
 
-                    <div
-                      className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${
-                        isCurrentSelected
-                          ? 'bg-secondary border-secondary'
-                          : 'border-outline/40 bg-surface-container-lowest'
+                    <span
+                      className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 border-2 transition-colors ${
+                        isCurrentSelected ? 'bg-secondary border-secondary' : 'border-outline/40'
                       }`}
+                      aria-hidden="true"
                     >
-                      {isCurrentSelected && (
-                        <div className="w-2 h-2 rounded-full bg-on-secondary"></div>
-                      )}
-                    </div>
+                      {isCurrentSelected && <span className="w-2 h-2 rounded-full bg-on-secondary"></span>}
+                    </span>
                   </label>
                 );
               })}
             </fieldset>
 
-            {/* Saathi AI Concept Hint */}
-            <div className="p-space-sm bg-tertiary-fixed rounded-xl flex items-start gap-space-sm">
-              <div className="w-7 h-7 rounded-full bg-on-tertiary-fixed text-tertiary-fixed flex items-center justify-center shrink-0 mt-0.5">
-                <span className="material-symbols-outlined text-[16px]">lightbulb</span>
-              </div>
+            {/* Study tip */}
+            <div className="glass-panel p-space-sm flex items-start gap-space-sm">
+              <span className="neu-icon neu-icon--sm neu-icon--round !text-tertiary-container mt-0.5">
+                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">lightbulb</span>
+              </span>
               <div className="flex-1 min-w-0">
-                <span className="font-label-md text-label-md font-bold text-on-tertiary-fixed block">
-                  Saathi Hint
-                </span>
-                <p className="font-body-sm text-body-sm text-on-tertiary-fixed-variant leading-relaxed">
-                  Focus on definitions, terminating vs non-terminating decimals, and core set properties.
+                <span className="font-label-md text-label-md font-bold text-on-tertiary-fixed block">Saathi Hint</span>
+                <p className="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+                  Read all four options before you choose, and rule out the ones that are clearly wrong first.
                 </p>
               </div>
             </div>
@@ -271,7 +248,7 @@ export default function QuizPage() {
               variant="primary"
               size="lg"
               disabled={!isSelected}
-              className={`flex-1 ${!isSelected ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className="flex-1"
               iconRight={isLastQuestion ? 'check_circle' : 'arrow_forward'}
               onClick={handleNextOrSubmit}
             >
@@ -283,4 +260,3 @@ export default function QuizPage() {
     </div>
   );
 }
-

@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StudySetProvider } from './context/StudySetContext';
 import { QuizProvider } from './context/QuizContext';
+import AmbientBackground from './components/AmbientBackground';
 import LandingPage from './pages/LandingPage';
 import DashboardPage from './pages/DashboardPage';
 import CreateSetPage from './pages/CreateSetPage';
@@ -14,6 +15,7 @@ function App() {
     <StudySetProvider>
     <QuizProvider>
       <BrowserRouter>
+        <AmbientBackground />
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />

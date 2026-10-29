@@ -1,22 +1,36 @@
 import express from "express";
 import { fileURLToPath } from "node:url";
+import { extractText, getDocumentProxy } from "unpdf";
 
 // ---------------------------------------------------------------------------
-// Limits (enforced here on the server, never only in the browser)
+// Study-set generation with Groq (OpenAI-compatible chat completions API).
+// Groq models take text and, for the vision model, images. They do not take
+// PDF files, so PDFs are turned into text here on the server first.
 // ---------------------------------------------------------------------------
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODELS_URL = "https://api.groq.com/openai/v1/models";
+
+// Limits (enforced here on the server, never only in the browser)
 export const LIMITS = {
     maxFiles: 5,
+    maxImages: 3, // Groq vision models accept at most 3 images per request
+    maxPdfPages: 100,
     maxTotalBytes: 10 * 1024 * 1024, // decoded bytes of all files together
-    maxTextChars: 100000,
+    maxTextChars: 100000, // typed notes
+    defaultMaxInputChars: 20000, // typed notes + all PDF text sent to the model (override: GROQ_MAX_INPUT_CHARS)
+    minPdfTextChars: 20, // fewer characters than this means "scanned PDF"
     maxTitleChars: 200,
     jsonBodyLimit: "16mb", // base64 inflates 10 MB of files to about 13.4 MB
-    geminiTimeoutMs: 90000,
+    providerTimeoutMs: 60000,
+    maxCompletionTokens: 6000,
+    retryBackoffMs: 1500, // pause before the single retry of a temporary provider error
+    maxRetryAfterMs: 10000, // a 429 is retried only if Groq says to wait this long or less
     flashcards: 8,
     questions: 10,
 };
 
 const INSTRUCTION = `You are a friendly study assistant for school and college students in India.
-Read the study material provided (typed notes, PDFs and/or photos of notes) and create study materials from it.
+Read the study material provided (typed notes, text taken from PDFs and/or photos of notes) and create study materials from it.
 
 Rules:
 - Use ONLY the information in the material. You may add very small clarifications, but do not invent facts.
@@ -53,16 +67,29 @@ JSON shape:
 // Small helpers
 // ---------------------------------------------------------------------------
 class GenerationError extends Error {
-    constructor(message, { retry = false, unusable = false, status } = {}) {
+    constructor(message, { retry = false, unusable = false, transport = false, status, code, retryAfterMs, model } = {}) {
         super(message);
         this.name = "GenerationError";
-        this.retry = retry;
+        this.retry = retry; // the AI's output was unusable; ask again
         this.unusable = unusable;
+        this.transport = transport; // connection problem, not a problem with the AI's output
         this.status = status;
+        this.code = code;
+        this.retryAfterMs = retryAfterMs;
+        this.model = model;
     }
 }
 
 const str = (v) => (typeof v === "string" ? v.trim() : "");
+
+/** A short description of a provider error that is safe to log: no keys, no long base64-like runs. */
+export function sanitizeForLog(message, apiKey) {
+    let s = String(message || "").replace(/\s+/g, " ");
+    if (apiKey) s = s.split(apiKey).join("[key]");
+    s = s.replace(/gsk_[0-9A-Za-z]{20,}/g, "[key]");
+    s = s.replace(/[A-Za-z0-9+/=_-]{40,}/g, "[data]");
+    return s.slice(0, 200);
+}
 
 export function parseJson(raw) {
     const cleaned = raw
@@ -89,97 +116,213 @@ export function sniffMime(buf) {
     return null;
 }
 
-/** Validate the request body. Returns { text, title, files } or throws { status, message }. */
+const SUPPORTED_IMAGES = new Set(["image/png", "image/jpeg", "image/webp"]);
+
+const httpError = (status, message) => Object.assign(new Error(message), { httpStatus: status });
+
+/** A file name that is safe to put in a prompt or an error message. */
+const cleanName = (name) =>
+    String(name || "file")
+        .split(/[\\/]/)
+        .pop()
+        .replace(/[^\w .()-]/g, "_")
+        .slice(0, 80) || "file";
+
+/** Validate the request body. Returns { text, title, files } or throws an error with httpStatus. */
 export function validateRequest(body) {
-    const bad = (status, message) => Object.assign(new Error(message), { httpStatus: status });
     const { text = "", title = "", files = [] } = body || {};
 
     if (typeof text !== "string" || typeof title !== "string" || !Array.isArray(files)) {
-        throw bad(400, "Invalid request.");
+        throw httpError(400, "Invalid request.");
     }
     if (!text.trim() && files.length === 0) {
-        throw bad(400, "Please add some notes, a PDF or a photo.");
+        throw httpError(400, "Please add some notes, a PDF or a photo.");
     }
     if (text.length > LIMITS.maxTextChars) {
-        throw bad(413, "Your notes are too long. Please shorten them or split them into two sets.");
+        throw httpError(413, "Your notes are too long. Please shorten them or split them into two sets.");
     }
     if (files.length > LIMITS.maxFiles) {
-        throw bad(400, `You can add a maximum of ${LIMITS.maxFiles} files.`);
+        throw httpError(400, `You can add a maximum of ${LIMITS.maxFiles} files.`);
     }
 
     let totalBytes = 0;
     const checked = [];
     for (const f of files) {
         if (!f || typeof f.data !== "string" || !f.data || !/^[A-Za-z0-9+/]+={0,2}$/.test(f.data)) {
-            throw bad(400, "One of the files could not be read. Please add it again.");
+            throw httpError(400, "One of the files could not be read. Please add it again.");
         }
         const buf = Buffer.from(f.data, "base64");
         totalBytes += buf.length;
         if (totalBytes > LIMITS.maxTotalBytes) {
-            throw bad(413, "The files are too large. Total size must be 10 MB or less.");
+            throw httpError(413, "The files are too large. Total size must be 10 MB or less.");
         }
         const mimeType = sniffMime(buf);
-        if (!mimeType) {
-            throw bad(415, "Only PDF and image files (JPG, PNG, WebP, HEIC) are allowed.");
+        if (mimeType === "image/heic" || mimeType === "image/heif") {
+            throw httpError(415, "HEIC photos are not supported. Please use a JPG or PNG photo.");
         }
-        checked.push({ mimeType, data: f.data });
+        if (mimeType !== "application/pdf" && !SUPPORTED_IMAGES.has(mimeType)) {
+            throw httpError(415, "Only PDF and image files (JPG, PNG, WebP) are allowed.");
+        }
+        checked.push({
+            name: cleanName(f.name),
+            mimeType,
+            data: f.data,
+            bytes: mimeType === "application/pdf" ? buf : null,
+        });
+    }
+    if (checked.filter((f) => f.mimeType !== "application/pdf").length > LIMITS.maxImages) {
+        throw httpError(400, `You can add up to ${LIMITS.maxImages} photos at a time.`);
     }
 
     return { text, title: title.trim().slice(0, LIMITS.maxTitleChars), files: checked };
 }
 
-// ---------------------------------------------------------------------------
-// Gemini call
-// ---------------------------------------------------------------------------
-async function callGemini({ apiKey, model, fetchImpl }, { text, title, files }, repairNote) {
-    const parts = [];
-    if (title) parts.push({ text: "Suggested topic title from the student: " + title });
-    if (text.trim()) parts.push({ text: "Student's typed notes:\n" + text.trim() });
-    for (const f of files) parts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
-    parts.push({
-        text:
-            "Create the study set now as JSON." +
-            (repairNote ? " Your previous answer was rejected: " + repairNote + ". Fix this and follow every rule." : ""),
-    });
+/**
+ * Turn the validated request into what the model receives: typed text, the
+ * text of every PDF, and the images. Nothing is dropped silently: a PDF that
+ * cannot be read, a scan with no text, or material that is too long is
+ * reported to the student instead of being skipped or cut.
+ */
+export async function prepareInput(input, maxInputChars) {
+    const pdfTexts = [];
+    for (const f of input.files.filter((x) => x.mimeType === "application/pdf")) {
+        let pdf;
+        try {
+            pdf = await getDocumentProxy(new Uint8Array(f.bytes), { verbosity: 0 });
+            if (pdf.numPages > LIMITS.maxPdfPages) {
+                throw httpError(413, `"${f.name}" has ${pdf.numPages} pages. The limit is ${LIMITS.maxPdfPages} pages.`);
+            }
+            const { text } = await extractText(pdf, { mergePages: true });
+            if (text.replace(/\s+/g, "").length < LIMITS.minPdfTextChars) {
+                throw httpError(
+                    422,
+                    `"${f.name}" has no selectable text, so it looks like a scan. Upload photos of its pages (up to ${LIMITS.maxImages}) or paste the text instead.`
+                );
+            }
+            pdfTexts.push({ name: f.name, text: text.trim() });
+        } catch (e) {
+            if (e.httpStatus) throw e;
+            const message =
+                e?.name === "PasswordException"
+                    ? `"${f.name}" is password-protected. Remove the password and add it again.`
+                    : `"${f.name}" could not be read as a PDF. It may be damaged.`;
+            throw httpError(422, message);
+        } finally {
+            try {
+                await pdf?.destroy();
+            } catch {
+                /* ignore */
+            }
+        }
+    }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    const totalChars = input.text.length + pdfTexts.reduce((n, p) => n + p.text.length, 0);
+    if (totalChars > maxInputChars) {
+        throw httpError(
+            413,
+            `Your material is about ${totalChars.toLocaleString("en-US")} characters, but the AI can take ${maxInputChars.toLocaleString("en-US")} at a time. Please use fewer pages or shorter notes.`
+        );
+    }
+
+    return {
+        text: input.text,
+        title: input.title,
+        pdfTexts,
+        images: input.files.filter((f) => f.mimeType !== "application/pdf"),
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Groq call
+// ---------------------------------------------------------------------------
+function buildUserContent({ text, title, pdfTexts, images }, repairNote) {
+    const parts = [];
+    if (title) parts.push("Suggested topic title from the student: " + title);
+    if (text.trim()) parts.push("Student's typed notes:\n" + text.trim());
+    for (const p of pdfTexts) parts.push(`Text taken from the PDF "${p.name}":\n${p.text}`);
+    if (images.length) parts.push(`The ${images.length} attached image(s) are photos of the student's notes. Read them too.`);
+    parts.push(
+        "Create the study set now as JSON." +
+            (repairNote ? " Your previous answer was rejected: " + repairNote + ". Fix this and follow every rule." : "")
+    );
+    const prompt = parts.join("\n\n");
+    if (!images.length) return prompt; // plain string for text-only models
+    return [
+        { type: "text", text: prompt },
+        ...images.map((img) => ({ type: "image_url", image_url: { url: `data:${img.mimeType};base64,${img.data}` } })),
+    ];
+}
+
+async function callGroq({ apiKey, model, fetchImpl }, prepared, repairNote) {
+    const startedAt = Date.now();
+    const elapsed = () => Math.round((Date.now() - startedAt) / 1000) + "s";
+
+    const body = {
+        model,
+        messages: [
+            { role: "system", content: INSTRUCTION },
+            { role: "user", content: buildUserContent(prepared, repairNote) },
+        ],
+        temperature: 0.4,
+        max_completion_tokens: LIMITS.maxCompletionTokens,
+        response_format: { type: "json_object" },
+        // gpt-oss models think before answering; keep that short so the JSON fits the output budget.
+        ...(model.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" } : {}),
+    };
+
     let response;
     try {
-        response = await fetchImpl(url, {
+        response = await fetchImpl(GROQ_URL, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-            body: JSON.stringify({
-                systemInstruction: { parts: [{ text: INSTRUCTION }] },
-                contents: [{ role: "user", parts }],
-                generationConfig: { responseMimeType: "application/json", temperature: 0.4 },
-            }),
-            signal: AbortSignal.timeout(LIMITS.geminiTimeoutMs),
+            headers: { "Content-Type": "application/json", Authorization: "Bearer " + apiKey },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(LIMITS.providerTimeoutMs),
         });
     } catch (e) {
         if (e?.name === "TimeoutError" || e?.name === "AbortError") {
+            console.error(`Groq timeout: model=${model} no answer after ${elapsed()}`);
             throw new GenerationError("timeout", { status: 504 });
         }
-        throw new GenerationError("network", { retry: true }); // transient connection problem
+        console.error(`Groq network error: model=${model} ${e?.cause?.code || e?.name || "error"}`);
+        throw new GenerationError("network", { retry: true, transport: true });
     }
 
     if (!response.ok) {
-        // Log only the status codes, never the response body (it can echo user content).
-        let googleStatus = "";
+        // Log only status codes and a scrubbed reason. Never the request, and never "failed_generation" (it echoes content).
+        let code = "";
+        let description = "";
         try {
-            googleStatus = (await response.json())?.error?.status || "";
+            const err = (await response.json())?.error;
+            code = str(err?.code) || str(err?.type);
+            description = sanitizeForLog(err?.message, apiKey);
         } catch {
             /* ignore */
         }
-        console.error("Gemini HTTP error:", response.status, googleStatus);
-        throw new GenerationError("gemini_http", { status: response.status });
+        // Number(null) is 0, so check that the header exists before reading it.
+        const header = response.headers?.get?.("retry-after");
+        const seconds = header === null || header === undefined || header === "" ? NaN : Number(header);
+        const retryAfterMs = Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds * 1000) : undefined;
+        console.error(
+            `Groq HTTP error: model=${model} http=${response.status} ${code} after ${elapsed()}${retryAfterMs !== undefined ? ` retry-after=${seconds}s` : ""} | ${description}`
+        );
+        // Groq answers HTTP 400 "json_validate_failed" when the model could not produce valid JSON: that is an output problem.
+        const badOutput = response.status === 400 && code === "json_validate_failed";
+        throw new GenerationError(badOutput ? "The answer was not valid JSON" : "groq_http", {
+            status: response.status,
+            code,
+            retryAfterMs,
+            model,
+            retry: badOutput,
+        });
     }
 
     const data = await response.json();
-    if (data?.promptFeedback?.blockReason) {
-        throw new GenerationError("blocked", { unusable: true });
+    const choice = data?.choices?.[0];
+    const out = typeof choice?.message?.content === "string" ? choice.message.content : "";
+    if (!out.trim()) throw new GenerationError("The AI returned an empty answer", { retry: true });
+    if (choice?.finish_reason === "length") {
+        throw new GenerationError("The answer was cut off before it finished", { retry: true });
     }
-    const out = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
-    if (!out) throw new GenerationError("The AI returned an empty answer", { retry: true });
     try {
         return parseJson(out);
     } catch {
@@ -237,6 +380,7 @@ export function normalize(raw) {
             if (new Set(options.map((o) => o.toLowerCase())).size !== 4) return null;
             const answer = typeof q.correctAnswer === "string" ? Number(q.correctAnswer) : q.correctAnswer;
             if (!Number.isInteger(answer) || answer < 0 || answer > 3) return null;
+            if (!str(q.explanation)) return null; // every answer needs a short explanation
             return {
                 topic: str(q.topic) || "General",
                 question: str(q.question),
@@ -292,39 +436,104 @@ export function normalize(raw) {
     };
 }
 
-/** Map an internal failure to an HTTP status and a safe message. */
+/**
+ * Ask Groq which models this key can use and compare with the configured ones.
+ * Groq's documentation can list a model that the API no longer serves, so the
+ * live list is the only reliable source. Never throws.
+ */
+export async function checkModels({ apiKey, model, visionModel, fetchImpl }) {
+    try {
+        const res = await fetchImpl(GROQ_MODELS_URL, {
+            headers: { Authorization: "Bearer " + apiKey },
+            signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) return { status: "unknown", httpStatus: res.status };
+        const ids = ((await res.json())?.data || []).map((m) => m.id).filter((id) => typeof id === "string");
+        const missing = [model, visionModel].filter((m) => m && !ids.includes(m));
+        return { status: missing.length ? "unavailable" : "ok", missing, available: ids.sort() };
+    } catch {
+        return { status: "unknown" };
+    }
+}
+
+/** Map an internal failure to an HTTP status and a safe, useful message. */
 function toHttpError(e) {
     if (e.unusable) return [422, "The AI could not find study content in this material. Try clearer notes."];
-    if (e.status === 504) return [504, "The AI took too long. Please try again."];
-    if (e.status === 429) return [429, "The AI service is busy right now. Please wait a minute and try again."];
-    if (e.status === 401 || e.status === 403) return [502, "The AI service key is not valid."];
-    if (e.status === 404) return [502, "The AI model name is not valid."];
+    if (e.status === 504) return [504, "The AI took too long to answer. Please try again, or use shorter notes or a smaller file."];
+    if (e.status === 429) {
+        const wait = e.retryAfterMs;
+        const when =
+            wait === undefined
+                ? "Please wait a while and try again."
+                : wait < 90000
+                  ? `Please try again in about ${Math.max(1, Math.ceil(wait / 1000))} seconds.`
+                  : `Please try again in about ${Math.ceil(wait / 60000)} minutes.`;
+        return [429, "The AI service limit has been reached (too many requests or tokens). " + when];
+    }
+    if (e.status === 401 || e.status === 403) return [502, "The AI service key is not valid or is not allowed to use this model."];
+    if (e.status === 404 || e.code === "model_not_found" || e.code === "model_decommissioned") {
+        const name = e.model ? `"${e.model}" ` : "";
+        return [502, `The AI model ${name}is not available for this server's API key (wrong name, retired, or no access). Check GROQ_MODEL on the server.`];
+    }
+    if (e.status === 413) return [413, "This material is too large for the AI's per-request limit. Please use fewer pages or shorter notes."];
     if (e.status === 400) return [502, "The AI could not read this material. Try a smaller or clearer file."];
+    if (e.status === 503) return [503, "The AI service is overloaded right now. Please try again in a minute."];
+    if (e.status >= 500 || e.status === 498) return [502, "The AI service is having problems right now. Please try again in a moment."];
     return [502, "Something went wrong while creating your study set. Please try again."];
+}
+
+/** Should the single allowed retry happen, and how long to wait first? Returns null for "do not retry". */
+function retryDelayMs(e) {
+    if (e.retry) return e.transport ? LIMITS.retryBackoffMs : 0; // bad output: ask again now; connection: brief pause
+    if (e.status === 504) return null; // our own timeout: a second wait would double the delay
+    if (e.status === 429) {
+        // A short per-minute limit is worth one wait. A long (daily) limit is not.
+        return e.retryAfterMs !== undefined && e.retryAfterMs <= LIMITS.maxRetryAfterMs ? e.retryAfterMs : null;
+    }
+    if (e.status >= 500 || e.status === 498) return LIMITS.retryBackoffMs; // 498 is Groq's "flex capacity exceeded"
+    return null; // 400, 401, 403, 404, 413, timeouts: retrying cannot help
 }
 
 // ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
-export function createApp({ env = process.env, fetchImpl = globalThis.fetch } = {}) {
+export function createApp({ env = process.env, fetchImpl = globalThis.fetch, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
     const app = express();
     app.disable("x-powered-by");
     app.use(express.json({ limit: LIMITS.jsonBodyLimit }));
 
     const config = () => ({
-        apiKey: (env.GEMINI_API_KEY || "").trim(),
-        model: (env.GEMINI_MODEL || "").replace(/^models\//, "").trim(),
+        apiKey: (env.GROQ_API_KEY || "").trim(),
+        model: (env.GROQ_MODEL || "").trim(),
+        visionModel: (env.GROQ_VISION_MODEL || "").trim(),
+        maxInputChars: Number(env.GROQ_MAX_INPUT_CHARS) > 0 ? Number(env.GROQ_MAX_INPUT_CHARS) : LIMITS.defaultMaxInputChars,
         fetchImpl,
     });
 
+    // Result of the last model availability check ("ok", "unavailable", "unknown"), or null if it has not run.
+    app.locals.modelCheck = null;
+    app.locals.verifyModels = async () => {
+        const cfg = config();
+        if (!cfg.apiKey || !cfg.model) return null;
+        const result = await checkModels(cfg);
+        app.locals.modelCheck = { status: result.status, missing: result.missing || [] };
+        return result;
+    };
+
     app.get("/api/health", (req, res) => {
-        const { apiKey, model } = config();
+        const { apiKey, model, visionModel } = config();
         const configured = Boolean(apiKey && model);
-        res.status(configured ? 200 : 503).json({
-            ok: configured,
+        const check = app.locals.modelCheck;
+        const unavailable = check?.status === "unavailable";
+        res.status(configured && !unavailable ? 200 : 503).json({
+            ok: configured && !unavailable,
+            provider: "groq",
             configured,
             model: model || null,
-            ...(configured ? {} : { error: "Set GEMINI_API_KEY and GEMINI_MODEL in the .env file." }),
+            visionModel: visionModel || null,
+            modelCheck: check?.status || null,
+            ...(unavailable ? { error: `Model not available for this key: ${check.missing.join(", ")}. Check GROQ_MODEL / GROQ_VISION_MODEL.` } : {}),
+            ...(configured ? {} : { error: "Set GROQ_API_KEY and GROQ_MODEL in the .env file." }),
         });
     });
 
@@ -332,31 +541,39 @@ export function createApp({ env = process.env, fetchImpl = globalThis.fetch } = 
         try {
             const cfg = config();
             if (!cfg.apiKey || !cfg.model) {
-                console.error("Missing GEMINI_API_KEY or GEMINI_MODEL.");
+                console.error("Missing GROQ_API_KEY or GROQ_MODEL.");
                 return res.status(503).json({ error: "The AI service is not set up yet. Please contact the app owner." });
             }
 
-            let input;
+            let prepared;
             try {
-                input = validateRequest(req.body);
+                prepared = await prepareInput(validateRequest(req.body), cfg.maxInputChars);
             } catch (e) {
                 if (e.httpStatus) return res.status(e.httpStatus).json({ error: e.message });
                 throw e;
             }
 
-            // At most two attempts: the original request and one retry (with a repair note for bad output).
+            // Photos need the vision model; text and PDF text go to the text model.
+            const usesImages = prepared.images.length > 0;
+            if (usesImages && !cfg.visionModel) {
+                return res.status(503).json({ error: "Reading photos is not set up on this server. Please upload a text PDF or paste your notes." });
+            }
+            const target = { ...cfg, model: usesImages ? cfg.visionModel : cfg.model };
+
+            // At most two attempts: the original request and one retry.
             let lastError;
             let repairNote;
             for (let attempt = 0; attempt < 2; attempt++) {
                 try {
-                    const raw = await callGemini(cfg, input, repairNote);
+                    const raw = await callGroq(target, prepared, repairNote);
                     return res.json(normalize(raw));
                 } catch (e) {
                     lastError = e;
                     console.error("Attempt " + (attempt + 1) + " failed:", e.message, e.status || "");
-                    const transient = e.retry || e.status === 500 || e.status === 502 || e.status === 503;
-                    if (!transient) break;
-                    if (e.retry && e.name === "GenerationError") repairNote = e.message;
+                    const delay = attempt === 0 ? retryDelayMs(e) : null;
+                    if (delay === null) break;
+                    if (e.retry && !e.transport) repairNote = e.message; // only tell the AI about problems with its own output
+                    if (delay > 0) await sleep(delay);
                 }
             }
 
@@ -387,11 +604,30 @@ export function createApp({ env = process.env, fetchImpl = globalThis.fetch } = 
 // Start the server only when this file is run directly (not when imported by tests)
 // ---------------------------------------------------------------------------
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-    const PORT = Number(process.env.PORT) || 3001;
-    if (!process.env.GEMINI_API_KEY || !process.env.GEMINI_MODEL) {
-        console.warn("Warning: GEMINI_API_KEY or GEMINI_MODEL is missing. /api/generate will return 503 until it is set.");
+    const PORT = Number(process.env.PORT) || 8787;
+    const HOST = "127.0.0.1"; // local only; the Vite dev proxy talks to this address
+    if (!process.env.GROQ_API_KEY || !process.env.GROQ_MODEL) {
+        console.warn("Warning: GROQ_API_KEY or GROQ_MODEL is missing. /api/generate will return 503 until it is set.");
     }
-    createApp().listen(PORT, () => {
-        console.log("StudySaathi server running on http://localhost:" + PORT);
+    const app = createApp();
+    const server = app.listen(PORT, HOST, () => {
+        console.log("StudySaathi server running on http://" + HOST + ":" + PORT);
+        app.locals.verifyModels().then((result) => {
+            if (!result) return;
+            if (result.status === "ok") console.log(`Groq models verified: ${process.env.GROQ_MODEL}${process.env.GROQ_VISION_MODEL ? ", " + process.env.GROQ_VISION_MODEL : ""}`);
+            else if (result.status === "unavailable") {
+                console.error(`WARNING: these models are not available for your Groq key: ${result.missing.join(", ")}`);
+                console.error("Models your key can use (chat): " + result.available.filter((id) => !/whisper|orpheus|guard|allam/.test(id)).join(", "));
+                console.error("Set GROQ_MODEL / GROQ_VISION_MODEL in .env to one of them and restart.");
+            } else console.warn("Could not check the Groq model list (is the API key valid and the network up?).");
+        });
+    });
+    server.on("error", (e) => {
+        console.error(
+            e.code === "EADDRINUSE"
+                ? `Port ${PORT} is already in use. Set a different PORT in .env and restart.`
+                : "Could not start the server: " + e.message
+        );
+        process.exit(1);
     });
 }

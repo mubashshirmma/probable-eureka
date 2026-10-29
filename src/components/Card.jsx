@@ -1,33 +1,45 @@
 import React from 'react';
 
+// Glass is the card surface. Variants change the tint, never the style language.
+const VARIANTS = {
+  lowest: 'glass',
+  low: 'glass glass--soft',
+  container: 'glass glass--soft',
+  high: 'glass glass--soft',
+  primary: 'glass glass--accent',
+};
+
 export default function Card({
   children,
   className = '',
   variant = 'lowest',
   hover = false,
   onClick,
+  onKeyDown,
   ...props
 }) {
-  const variants = {
-    lowest: 'bg-surface-container-lowest text-on-surface shadow-sm',
-    low: 'bg-surface-container-low text-on-surface shadow-sm',
-    container: 'bg-surface-container text-on-surface shadow-sm',
-    high: 'bg-surface-container-high text-on-surface',
-    primary: 'bg-primary text-on-primary shadow-md',
+  // A clickable card is a button for keyboard and screen-reader users.
+  const interactive = typeof onClick === 'function';
+  const handleKeyDown = (event) => {
+    onKeyDown?.(event);
+    if (interactive && !event.defaultPrevented && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      onClick(event);
+    }
   };
-
-  const hoverClass = hover
-    ? 'transition-all hover:shadow-md cursor-pointer active:scale-[0.99]'
-    : '';
 
   return (
     <div
-      className={`rounded-xl p-5 ${variants[variant] || variants.lowest} ${hoverClass} ${className}`}
+      className={`p-5 ${VARIANTS[variant] || VARIANTS.lowest} ${
+        hover || interactive ? 'glass-lift cursor-pointer' : ''
+      } ${className}`}
       onClick={onClick}
+      onKeyDown={interactive ? handleKeyDown : onKeyDown}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
       {...props}
     >
       {children}
     </div>
   );
 }
-

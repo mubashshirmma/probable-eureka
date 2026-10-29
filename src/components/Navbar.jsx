@@ -1,72 +1,63 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import LogoMark from './LogoMark';
+
+// Same destinations as the bottom bar, so desktop and mobile always agree.
+export const NAV_ITEMS = [
+  { label: 'Home', path: '/', icon: 'home' },
+  { label: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
+  { label: 'Create', path: '/create', icon: 'add_circle' },
+  { label: 'Study', path: '/results', icon: 'menu_book' },
+  { label: 'Quiz', path: '/quiz', icon: 'quiz' },
+];
 
 export default function Navbar({ subtitle = 'Home' }) {
   const location = useLocation();
 
   return (
-    <header className="fixed top-0 w-full z-50 pt-safe bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
-      <div className="h-16 px-margin flex items-center justify-between gap-space-sm max-w-7xl mx-auto">
-        <Link to="/" className="flex items-center gap-space-sm min-w-0 text-inherit no-underline">
-          <img
-            alt="StudySaathi AI Logo"
-            className="h-8 w-auto object-contain flex-shrink-0"
-            src="https://lh3.googleusercontent.com/aida/AEtjO1U5Hn00h2H0TL7BbCuRbZgZBFHrg8f0KkPf8JVr28GieRip7ub7II3vWQR36WFgGfUFTn8E8mGIE6EGxq57n1209T_CFsM9Nql89um3TW34cRO0lZEgKPRgudDCKPc1F1nwdj3wC7fiT9XMzMj-7MIb7dLXZIBu6u_MHqcxiWiPJYWqWZkQmpAqSXWOl4sH_GwcyfbsdnA6d0xdmfuqCwI-Xj6rqoQjXZFvQyBzl30r"
-          />
-          <div className="flex flex-col min-w-0">
-            <span className="font-headline-sm text-headline-sm text-primary tracking-tight truncate font-bold">
-              StudySaathi
-            </span>
-            <span className="font-label-sm text-label-sm text-on-surface-variant truncate uppercase tracking-wider">
-              {subtitle}
-            </span>
-          </div>
-        </Link>
-
-        <div className="flex items-center gap-space-xs">
-          <nav aria-label="Header Navigation" className="hidden sm:flex items-center gap-space-xs">
-            <Link
-              to="/"
-              className={`px-space-sm py-space-xs font-label-md text-label-md transition-colors ${
-                location.pathname === '/'
-                  ? 'text-secondary font-semibold'
-                  : 'text-on-surface-variant hover:text-secondary'
-              }`}
-            >
-              Home
-            </Link>
-            <a
-              href="#features"
-              className="px-space-sm py-space-xs text-on-surface-variant hover:text-secondary font-label-md text-label-md transition-colors"
-            >
-              Features
-            </a>
-            <Link
-              to="/dashboard"
-              className={`px-space-sm py-space-xs font-label-md text-label-md transition-colors ${
-                location.pathname === '/dashboard'
-                  ? 'text-secondary font-semibold'
-                  : 'text-on-surface-variant hover:text-secondary'
-              }`}
-            >
-              Dashboard
-            </Link>
-          </nav>
-
-          <Link
-            to="/dashboard"
-            aria-label="Profile"
-            className="w-11 h-11 flex items-center justify-center p-space-xs rounded-full hover:bg-surface-container-high transition-colors"
-          >
-            <img
-              alt="Profile"
-              className="w-8 h-8 rounded-full object-cover"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2inaHLQ74OZ4KmS2GFjbOrl2klrGE1LfmOzm4urXFfYw2r7Xx4JPMQWDi-RQ47Am_fNw0tWQ-Orh1nHogbBpPOElTba-UyZ7msEAhghSOersCmpazTJaNHTOHgSa1jjEx2u2zahGZ353MgrVPEFmi6ToI4Z8yh-Tg6MHwfU_OmWvdHriNOpPkfq2G0XJQ1c3vd8zALslqJtzOwFPF8XCmkHSbAxXZ_-LEKAYn8Gwf"
-            />
+    <header className="fixed top-0 inset-x-0 z-50 pt-safe">
+      <div className="mx-auto max-w-7xl px-3 sm:px-5 pt-2">
+        <div className="glass glass--strong h-14 sm:h-16 px-3 sm:px-4 flex items-center justify-between gap-space-sm !rounded-2xl">
+          <Link to="/" className="flex items-center gap-space-sm min-w-0 text-inherit no-underline rounded-xl">
+            <LogoMark className="h-9 w-9 flex-shrink-0" />
+            <div className="flex flex-col min-w-0 leading-tight">
+              <span className="font-headline-sm text-headline-sm text-primary tracking-tight truncate font-bold">
+                StudySaathi
+              </span>
+              <span className="font-label-sm text-label-sm text-on-surface-variant truncate uppercase tracking-wider">
+                {subtitle}
+              </span>
+            </div>
           </Link>
+
+          <div className="flex items-center gap-space-sm">
+            {/* Desktop navigation. On phones the bottom bar does this job. */}
+            <nav aria-label="Main navigation" className="hidden md:flex items-center gap-1">
+              {NAV_ITEMS.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className="nav-item font-label-lg text-label-lg"
+                  aria-current={location.pathname === item.path ? 'page' : undefined}
+                >
+                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
+                    {item.icon}
+                  </span>
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+
+            <Link to="/dashboard" aria-label="Profile and dashboard" className="neu-icon neu-icon--round !w-11 !h-11 !p-0.5">
+              <img
+                alt=""
+                className="w-full h-full rounded-full object-cover"
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2inaHLQ74OZ4KmS2GFjbOrl2klrGE1LfmOzm4urXFfYw2r7Xx4JPMQWDi-RQ47Am_fNw0tWQ-Orh1nHogbBpPOElTba-UyZ7msEAhghSOersCmpazTJaNHTOHgSa1jjEx2u2zahGZ353MgrVPEFmi6ToI4Z8yh-Tg6MHwfU_OmWvdHriNOpPkfq2G0XJQ1c3vd8zALslqJtzOwFPF8XCmkHSbAxXZ_-LEKAYn8Gwf"
+              />
+            </Link>
+          </div>
         </div>
       </div>
     </header>
   );
 }
-

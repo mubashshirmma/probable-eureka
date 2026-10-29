@@ -20,6 +20,7 @@ export default function CreateSetPage() {
   const [selectedFiles, setSelectedFiles] = useState([]); // Array of { id, file, type: 'pdf' | 'image', name, size, rawSize, previewUrl }
   const [errorMessage, setErrorMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [selectedOutputs, setSelectedOutputs] = useState({
     summary: true,
     flashcards: true,
@@ -27,6 +28,8 @@ export default function CreateSetPage() {
   });
 
   const MAX_FILES = 5;
+  const MAX_PHOTOS = 3; // the AI's vision model reads at most 3 images per request
+  const SUPPORTED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
   const MAX_TOTAL_SIZE = 10 * 1024 * 1024; // 10 MB in bytes
 
   const pdfCount = selectedFiles.filter((f) => f.type === 'pdf').length;
@@ -46,54 +49,57 @@ export default function CreateSetPage() {
     setNotes('');
   };
 
-  // Helper function to validate and add incoming files to selectedFiles
-  const handleAddFiles = (fileList, type) => {
-    if (!fileList || fileList.length === 0) return;
-    const incomingFiles = Array.from(fileList);
+  const isPdfFile = (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+  const isSupportedPhoto = (f) => SUPPORTED_PHOTO_TYPES.includes(f.type);
+
+  // Validate and add incoming files. `items` is [{ file, type: 'pdf' | 'image' }];
+  // everything is checked together against the type, count and size limits.
+  const addItems = (items) => {
+    if (!items || items.length === 0) return;
 
     // 1. Format validation
-    for (let f of incomingFiles) {
-      if (type === 'pdf') {
-        if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) {
-          setErrorMessage('Only PDF files are allowed here.');
-          return;
-        }
-      } else if (type === 'image') {
-        if (!f.type.startsWith('image/')) {
-          setErrorMessage('Only image files (JPG, PNG) are allowed here.');
-          return;
-        }
+    for (const { file: f, type } of items) {
+      if (type === 'pdf' && !isPdfFile(f)) {
+        setErrorMessage('Only PDF files are allowed here.');
+        return;
+      }
+      if (type === 'image' && !isSupportedPhoto(f)) {
+        setErrorMessage('Only JPG, PNG or WebP photos are allowed here.');
+        return;
       }
     }
 
     // 2. Filter out duplicates (same name and size)
-    const nonDuplicates = incomingFiles.filter(
-      (newF) =>
-        !selectedFiles.some(
-          (existing) => existing.name === newF.name && existing.rawSize === newF.size
-        )
+    const fresh = items.filter(
+      ({ file: n }) => !selectedFiles.some((existing) => existing.name === n.name && existing.rawSize === n.size)
     );
-
-    if (nonDuplicates.length === 0) {
+    if (fresh.length === 0) {
       setErrorMessage('This file has already been added.');
       return;
     }
 
+    // 3a. The AI reads at most 3 photos per request
+    const newPhotos = fresh.filter((i) => i.type === 'image').length;
+    if (photoCount + newPhotos > MAX_PHOTOS) {
+      setErrorMessage('You can add up to 3 photos at a time.');
+      return;
+    }
+
     // 3. Check file count limit (maximum 5 files)
-    if (selectedFiles.length + nonDuplicates.length > MAX_FILES) {
+    if (selectedFiles.length + fresh.length > MAX_FILES) {
       setErrorMessage('You can add a maximum of 5 files.');
       return;
     }
 
     // 4. Check total combined size limit (10 MB)
-    const newBytes = nonDuplicates.reduce((sum, f) => sum + f.size, 0);
+    const newBytes = fresh.reduce((sum, i) => sum + i.file.size, 0);
     if (currentTotalBytes + newBytes > MAX_TOTAL_SIZE) {
       setErrorMessage('Total size cannot be more than 10 MB.');
       return;
     }
 
     // Add new valid files to existing selectedFiles list
-    const newItems = nonDuplicates.map((file) => ({
+    const newItems = fresh.map(({ file, type }) => ({
       id: `${file.name}-${file.size}-${Math.random()}`,
       file,
       type,
@@ -105,6 +111,40 @@ export default function CreateSetPage() {
 
     setSelectedFiles((prev) => [...prev, ...newItems]);
     setErrorMessage('');
+  };
+
+  const handleAddFiles = (fileList, type) =>
+    addItems(Array.from(fileList || []).map((file) => ({ file, type })));
+
+  // Drag and drop: PDFs and photos can be dropped together on the upload zone.
+  const handleDragOver = (event) => {
+    if (isGenerating || isMaxFilesReached) return;
+    event.preventDefault();
+    setIsDragOver(true);
+  };
+  const handleDragLeave = (event) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) setIsDragOver(false);
+  };
+  const handleDrop = (event) => {
+    event.preventDefault();
+    setIsDragOver(false);
+    if (isGenerating) return;
+    const dropped = Array.from(event.dataTransfer?.files || []);
+    if (dropped.length === 0) return;
+    if (isMaxFilesReached) {
+      setErrorMessage('You can add a maximum of 5 files.');
+      return;
+    }
+    const items = [];
+    for (const f of dropped) {
+      if (isPdfFile(f)) items.push({ file: f, type: 'pdf' });
+      else if (isSupportedPhoto(f)) items.push({ file: f, type: 'image' });
+      else {
+        setErrorMessage('Only PDF, JPG, PNG or WebP files can be added here.');
+        return;
+      }
+    }
+    addItems(items);
   };
 
   const handlePdfUpload = (e) => {
@@ -172,7 +212,7 @@ export default function CreateSetPage() {
   };
 
   return (
-    <div className="bg-background font-body-md text-body-md text-on-surface flex flex-col min-h-screen">
+    <div className="font-body-md text-body-md text-on-surface flex flex-col min-h-screen">
       <Navbar subtitle="Create Set" />
 
       {/* Hidden File Inputs with multiple attribute */}
@@ -194,12 +234,12 @@ export default function CreateSetPage() {
         onChange={handlePhotoUpload}
       />
 
-      <main className="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-background">
-        <div className="w-full px-margin py-space-md flex flex-col gap-space-lg max-w-xl mx-auto">
+      <main className="flex-1 flex flex-col relative w-full pt-24 sm:pt-28 pb-32 md:pb-16">
+        <div className="w-full px-4 sm:px-6 flex flex-col gap-6 max-w-xl md:max-w-3xl lg:max-w-6xl mx-auto">
           {/* Header Section */}
-          <div className="flex flex-col gap-space-xs pt-space-xs">
+          <div className="flex flex-col gap-space-xs rise">
             <div className="flex items-center gap-space-xs">
-              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-secondary-fixed text-secondary">
+              <span className="neu-icon neu-icon--round !w-7 !h-7">
                 <span className="material-symbols-outlined text-[16px]">magic_button</span>
               </span>
               <span className="font-label-sm text-label-sm text-secondary font-bold tracking-wider uppercase">
@@ -216,10 +256,10 @@ export default function CreateSetPage() {
 
           {/* Loading State Overlay / Card */}
           {isGenerating ? (
-            <Card className="flex flex-col gap-space-md border-2 border-secondary/20 animate-pulse">
+            <Card className="flex flex-col gap-space-md max-w-2xl w-full mx-auto" role="status" aria-live="polite" aria-busy="true">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-space-sm">
-                  <div className="w-10 h-10 rounded-full bg-secondary-fixed flex items-center justify-center text-secondary relative">
+                  <div className="neu-icon neu-icon--round neu-icon--lg">
                     <span className="material-symbols-outlined text-[22px] animate-pulse">
                       psychology
                     </span>
@@ -233,15 +273,15 @@ export default function CreateSetPage() {
                     </h2>
                   </div>
                 </div>
-                <span className="font-label-sm text-label-sm font-semibold text-secondary px-2 py-1 bg-surface-container-low rounded-full">
+                <span className="pill pill--accent px-2.5 py-1 font-label-sm text-label-sm font-semibold">
                   Processing
                 </span>
               </div>
 
               {/* Progress Bar */}
               <div className="flex flex-col gap-1.5">
-                <div className="w-full bg-surface-container-high h-2.5 rounded-full overflow-hidden">
-                  <div className="bg-secondary h-full rounded-full w-3/4 animate-[pulse_1s_infinite]"></div>
+                <div className="progress-track">
+                  <div className="progress-fill progress-fill--indeterminate"></div>
                 </div>
                 <div className="flex justify-between items-center text-on-surface-variant font-label-sm text-label-sm">
                   <span>Generating Study Module...</span>
@@ -250,7 +290,7 @@ export default function CreateSetPage() {
               </div>
 
               {/* Step-by-Step Progress Pipeline */}
-              <div className="bg-surface-container-low rounded-lg p-space-sm flex flex-col gap-2">
+              <div className="neu-well p-4 flex flex-col gap-2.5">
                 <div className="flex items-center justify-between text-on-surface">
                   <div className="flex items-center gap-2">
                     <span
@@ -288,8 +328,9 @@ export default function CreateSetPage() {
               </div>
             </Card>
           ) : (
-            /* Main Input Form Container */
-            <Card className="flex flex-col gap-space-md">
+            /* Main Input Form: your material on the left, upload and generate on the right */
+            <div className="grid lg:grid-cols-2 gap-5 lg:gap-6 items-start">
+            <Card className="flex flex-col gap-space-md rise" style={{ '--i': 1 }}>
               {/* Topic Title Input */}
               <div className="flex flex-col gap-space-xs">
                 <label
@@ -302,7 +343,7 @@ export default function CreateSetPage() {
                   </span>
                 </label>
                 <div className="relative flex items-center">
-                  <span className="material-symbols-outlined absolute left-3 text-outline text-[20px]">
+                  <span className="material-symbols-outlined absolute left-3.5 text-outline text-[20px] pointer-events-none" aria-hidden="true">
                     bookmark
                   </span>
                   <input
@@ -313,7 +354,7 @@ export default function CreateSetPage() {
                     maxLength={200}
                     disabled={isGenerating}
                     placeholder="e.g., Number System - CBSE Class 9 Maths"
-                    className="w-full pl-10 pr-space-md py-2.5 bg-surface-container-low rounded-lg font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:bg-surface-container-lowest focus:ring-2 focus:ring-secondary/40 focus:outline-none transition-all"
+                    className="neu-input pl-11 pr-4 py-3 font-body-md text-body-md"
                   />
                 </div>
               </div>
@@ -344,7 +385,7 @@ export default function CreateSetPage() {
                       if (errorMessage) setErrorMessage('');
                     }}
                     placeholder="Type or paste concepts, formulas, or chapter summaries..."
-                    className="w-full p-space-sm bg-surface-container-low rounded-lg font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:bg-surface-container-lowest focus:ring-2 focus:ring-secondary/40 focus:outline-none transition-all resize-none leading-relaxed"
+                    className="neu-input p-4 font-body-md text-body-md resize-y min-h-[9rem] lg:min-h-[15rem] leading-relaxed"
                   />
                 </div>
 
@@ -353,7 +394,7 @@ export default function CreateSetPage() {
                   <button
                     type="button"
                     onClick={handleUseSampleNotes}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high text-primary font-label-md text-label-md hover:bg-surface-variant transition-colors min-h-[34px]"
+                    className="neu-chip px-4 py-2 min-h-[40px] text-primary font-label-md text-label-md font-semibold"
                   >
                     <span className="material-symbols-outlined text-[17px] text-secondary">
                       history_edu
@@ -365,7 +406,7 @@ export default function CreateSetPage() {
                     <button
                       type="button"
                       onClick={handleClearText}
-                      className="font-label-md text-label-md text-on-surface-variant hover:text-error transition-colors px-2 py-1 min-h-[34px] inline-flex items-center"
+                      className="font-label-md text-label-md text-on-surface-variant hover:text-error transition-colors px-3 py-1 min-h-[40px] inline-flex items-center rounded-full"
                     >
                       Clear Text
                     </button>
@@ -373,17 +414,41 @@ export default function CreateSetPage() {
                 </div>
               </div>
 
+            </Card>
+
+            <Card className="flex flex-col gap-space-md rise" style={{ '--i': 2 }}>
               {/* Divider */}
               <div className="relative flex py-1 items-center">
                 <div className="flex-grow border-t border-outline/15"></div>
                 <span className="flex-shrink mx-3 text-on-surface-variant font-label-sm text-label-sm uppercase font-semibold">
-                  OR Upload Files (Up to 5)
+                  Upload Files (Up to 5)
                 </span>
                 <div className="flex-grow border-t border-outline/15"></div>
               </div>
 
               {/* Input Methods 2 & 3: Upload Buttons with Dynamic States & Badges */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
+              <div
+                className={`dropzone p-4 flex flex-col gap-4 ${isDragOver ? 'is-dragover' : ''} ${isMaxFilesReached ? 'is-disabled' : ''}`}
+                onDragEnter={handleDragOver}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                aria-label="Drop files here"
+              >
+                <div className="flex flex-col items-center text-center gap-1.5 pt-1">
+                  <span className="neu-icon neu-icon--lg !text-secondary">
+                    <span className="material-symbols-outlined text-[28px]" aria-hidden="true">
+                      {isDragOver ? 'file_download' : 'cloud_upload'}
+                    </span>
+                  </span>
+                  <span className="font-title-md text-title-md text-primary font-bold">
+                    {isDragOver ? 'Drop to add your files' : (<><span className="sm:hidden">Add your files</span><span className="hidden sm:inline">Drag and drop files here</span></>)}
+                  </span>
+                  <span className="font-label-md text-label-md text-on-surface-variant">
+                    PDFs, JPG, PNG or WebP. Up to 5 files, 10 MB in total.
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
                 {/* Method 2: Upload PDF */}
                 <button
                   type="button"
@@ -391,13 +456,9 @@ export default function CreateSetPage() {
                   onClick={() => {
                     if (!isMaxFilesReached) pdfInputRef.current?.click();
                   }}
-                  className={`p-3.5 rounded-xl border border-dashed transition-all flex items-center justify-center gap-2.5 text-primary group ${
-                    isMaxFilesReached
-                      ? 'border-outline/20 bg-surface-container-lowest opacity-60 cursor-not-allowed'
-                      : 'border-outline/30 bg-surface-container-low hover:bg-surface-container active:scale-[0.99] cursor-pointer'
-                  }`}
+                  className="neu-btn min-h-[64px] px-4 py-3 rounded-2xl flex items-center justify-center gap-3 text-primary group"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-surface-container-lowest flex items-center justify-center text-error relative shadow-xs group-hover:scale-105 transition-transform">
+                  <div className="neu-icon neu-icon--sm !text-error relative group-hover:scale-105">
                     <span className="material-symbols-outlined text-[20px]">
                       {pdfCount > 0 ? 'add' : 'picture_as_pdf'}
                     </span>
@@ -426,13 +487,9 @@ export default function CreateSetPage() {
                   onClick={() => {
                     if (!isMaxFilesReached) photoInputRef.current?.click();
                   }}
-                  className={`p-3.5 rounded-xl border border-dashed transition-all flex items-center justify-center gap-2.5 text-primary group ${
-                    isMaxFilesReached
-                      ? 'border-outline/20 bg-surface-container-lowest opacity-60 cursor-not-allowed'
-                      : 'border-outline/30 bg-surface-container-low hover:bg-surface-container active:scale-[0.99] cursor-pointer'
-                  }`}
+                  className="neu-btn min-h-[64px] px-4 py-3 rounded-2xl flex items-center justify-center gap-3 text-primary group"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-surface-container-lowest flex items-center justify-center text-secondary relative shadow-xs group-hover:scale-105 transition-transform">
+                  <div className="neu-icon neu-icon--sm relative group-hover:scale-105">
                     <span className="material-symbols-outlined text-[20px]">
                       {photoCount > 0 ? 'add' : 'photo_camera'}
                     </span>
@@ -454,10 +511,11 @@ export default function CreateSetPage() {
                   </div>
                 </button>
               </div>
+              </div>
 
               {/* Maximum Files Reached Notification */}
               {isMaxFilesReached && (
-                <div className="p-2 rounded-lg bg-surface-container-high text-on-surface-variant text-center font-label-sm text-label-sm font-semibold flex items-center justify-center gap-1.5">
+                <div className="glass-panel p-2 text-on-surface-variant text-center font-label-sm text-label-sm font-semibold flex items-center justify-center gap-1.5">
                   <span className="material-symbols-outlined text-[16px] text-outline">lock</span>
                   <span>Maximum files reached.</span>
                 </div>
@@ -482,17 +540,17 @@ export default function CreateSetPage() {
                   {selectedFiles.map((item) => (
                     <div
                       key={item.id}
-                      className="p-2.5 rounded-xl bg-surface-container-low border border-outline/10 flex items-center justify-between gap-space-sm shadow-xs transition-all hover:bg-surface-container"
+                      className="glass glass--soft !rounded-2xl p-2.5 flex items-center justify-between gap-space-sm transition-all hover:-translate-y-0.5"
                     >
                       <div className="flex items-center gap-space-sm min-w-0">
                         {item.type === 'image' && item.previewUrl ? (
                           <img
                             src={item.previewUrl}
                             alt="Preview"
-                            className="w-11 h-11 rounded-lg object-cover border border-secondary/20 shrink-0"
+                            className="w-11 h-11 rounded-xl object-cover ring-2 ring-white shadow-sm shrink-0"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded-lg bg-error-container text-on-error-container flex items-center justify-center shrink-0">
+                          <div className="neu-icon !text-error">
                             <span className="material-symbols-outlined text-[20px]">
                               picture_as_pdf
                             </span>
@@ -511,8 +569,9 @@ export default function CreateSetPage() {
                       <button
                         type="button"
                         onClick={() => handleRemoveFile(item.id)}
-                        className="w-8 h-8 rounded-full hover:bg-error-container text-on-surface-variant hover:text-error transition-colors flex items-center justify-center shrink-0"
+                        className="neu-icon neu-icon--round neu-icon--sm !text-on-surface-variant hover:!text-error"
                         title="Remove file"
+                        aria-label={`Remove ${item.name}`}
                       >
                         <span className="material-symbols-outlined text-[18px]">close</span>
                       </button>
@@ -522,7 +581,7 @@ export default function CreateSetPage() {
               )}
 
               {/* Information Note in Clean English */}
-              <div className="p-2.5 rounded-lg bg-surface-container flex items-center gap-2 text-on-surface-variant font-label-sm text-label-sm">
+              <div className="glass-panel p-3 flex items-center gap-2 text-on-surface-variant font-label-md text-label-md">
                 <span
                   className="material-symbols-outlined text-[18px] text-secondary shrink-0"
                   style={{ fontVariationSettings: "'FILL' 1" }}
@@ -536,7 +595,7 @@ export default function CreateSetPage() {
 
               {/* Friendly Error Message */}
               {errorMessage && (
-                <div className="p-3 rounded-lg bg-error-container text-on-error-container flex items-center gap-2 text-label-md">
+                <div role="alert" className="p-3 rounded-xl bg-error-container text-on-error-container flex items-center gap-2 text-label-md font-medium shadow-sm">
                   <span className="material-symbols-outlined text-[18px] shrink-0">error</span>
                   <span>{errorMessage}</span>
                 </div>
@@ -547,21 +606,14 @@ export default function CreateSetPage() {
                 <span className="font-label-sm text-label-sm text-on-surface-variant font-bold uppercase tracking-wider">
                   Output Assets to Generate
                 </span>
-                <div className="flex flex-wrap gap-space-xs">
+                <div className="flex flex-wrap gap-space-sm" role="group" aria-label="Output assets to generate">
                   <button
                     type="button"
+                    aria-pressed={selectedOutputs.summary}
                     onClick={() => toggleOutput('summary')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-label-sm text-label-sm transition-all shadow-sm ${
-                      selectedOutputs.summary
-                        ? 'bg-secondary-fixed text-primary font-semibold'
-                        : 'bg-surface-container text-on-surface-variant'
-                    }`}
+                    className="neu-chip px-4 py-2 min-h-[40px] font-label-md text-label-md font-semibold"
                   >
-                    <span
-                      className={`material-symbols-outlined text-[16px] ${
-                        selectedOutputs.summary ? 'text-secondary' : 'text-outline'
-                      }`}
-                    >
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
                       {selectedOutputs.summary ? 'check_circle' : 'radio_button_unchecked'}
                     </span>
                     <span>Summary</span>
@@ -569,18 +621,11 @@ export default function CreateSetPage() {
 
                   <button
                     type="button"
+                    aria-pressed={selectedOutputs.flashcards}
                     onClick={() => toggleOutput('flashcards')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-label-sm text-label-sm transition-all shadow-sm ${
-                      selectedOutputs.flashcards
-                        ? 'bg-secondary-fixed text-primary font-semibold'
-                        : 'bg-surface-container text-on-surface-variant'
-                    }`}
+                    className="neu-chip px-4 py-2 min-h-[40px] font-label-md text-label-md font-semibold"
                   >
-                    <span
-                      className={`material-symbols-outlined text-[16px] ${
-                        selectedOutputs.flashcards ? 'text-secondary' : 'text-outline'
-                      }`}
-                    >
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
                       {selectedOutputs.flashcards ? 'check_circle' : 'radio_button_unchecked'}
                     </span>
                     <span>8 Flashcards</span>
@@ -588,18 +633,11 @@ export default function CreateSetPage() {
 
                   <button
                     type="button"
+                    aria-pressed={selectedOutputs.quiz}
                     onClick={() => toggleOutput('quiz')}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-label-sm text-label-sm transition-all shadow-sm ${
-                      selectedOutputs.quiz
-                        ? 'bg-secondary-fixed text-primary font-semibold'
-                        : 'bg-surface-container text-on-surface-variant'
-                    }`}
+                    className="neu-chip px-4 py-2 min-h-[40px] font-label-md text-label-md font-semibold"
                   >
-                    <span
-                      className={`material-symbols-outlined text-[16px] ${
-                        selectedOutputs.quiz ? 'text-secondary' : 'text-outline'
-                      }`}
-                    >
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
                       {selectedOutputs.quiz ? 'check_circle' : 'radio_button_unchecked'}
                     </span>
                     <span>10-Question Quiz</span>
@@ -614,6 +652,7 @@ export default function CreateSetPage() {
                 icon="auto_awesome"
                 className="w-full mt-space-xs"
                 onClick={handleGenerate}
+                loading={isGenerating}
               >
                 Generate Study Materials
               </Button>
@@ -628,6 +667,7 @@ export default function CreateSetPage() {
                 </span>
               </div>
             </Card>
+            </div>
           )}
         </div>
       </main>

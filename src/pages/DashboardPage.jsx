@@ -5,21 +5,23 @@ import Sidebar from '../components/Sidebar';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { useStudySet } from '../context/StudySetContext';
+import { useQuiz } from '../context/QuizContext';
 import { studySetData } from '../data/sampleData';
 
 export default function DashboardPage() {
   const { setStudySet } = useStudySet();
+  const { startQuiz } = useQuiz();
   // The Number System card is a built-in demo set, loaded only when the student opens it.
   const loadDemoSet = () => setStudySet(studySetData, 'demo');
 
   return (
-    <div className="bg-background font-body-md text-body-md text-on-surface flex flex-col min-h-screen">
+    <div className="font-body-md text-body-md text-on-surface flex flex-col min-h-screen">
       <Navbar subtitle="Dashboard" />
 
-      <main className="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-background">
-        <div className="flex flex-col w-full px-margin py-space-md max-w-xl mx-auto space-y-space-md">
+      <main className="flex-1 flex flex-col relative w-full pt-24 sm:pt-28 pb-32 md:pb-16">
+        <div className="grid grid-cols-1 lg:grid-cols-12 w-full px-4 sm:px-6 max-w-xl md:max-w-3xl lg:max-w-6xl mx-auto gap-5 lg:gap-6">
           {/* Student Welcome Banner */}
-          <section className="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex flex-col space-y-space-sm relative overflow-hidden">
+          <section className="glass p-5 sm:p-7 flex flex-col gap-4 relative overflow-hidden lg:col-span-12 lg:order-1 rise">
             <div className="flex items-start justify-between">
               <div className="flex flex-col min-w-0 pr-space-sm">
                 <div className="inline-flex items-center gap-space-xs mb-1">
@@ -37,7 +39,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Compact Target Badge */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-surface-container-high rounded-full self-start flex-shrink-0">
+              <div className="pill px-3 py-1.5 self-start flex-shrink-0">
                 <span
                   className="material-symbols-outlined text-[16px] text-primary"
                   style={{ fontVariationSettings: "'FILL' 1" }}
@@ -55,8 +57,8 @@ export default function DashboardPage() {
               <Button
                 to="/create"
                 variant="primary"
-                size="md"
-                className="w-full h-11"
+                size="lg"
+                className="w-full sm:w-auto"
                 icon="auto_awesome"
               >
                 + Create Study Set
@@ -65,14 +67,14 @@ export default function DashboardPage() {
           </section>
 
           {/* Metric Badges & Learning Highlights Grid */}
-          <section aria-label="Learning Metrics" className="grid grid-cols-2 gap-space-sm">
+          <section aria-label="Learning Metrics" className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:col-span-12 lg:order-2">
             {/* Sets Created */}
-            <div className="bg-surface-container-lowest rounded-xl p-space-sm shadow-sm flex flex-col justify-between h-24">
+            <div className="glass glass-lift p-4 flex flex-col justify-between h-28 rise" style={{ "--i": 1 }}>
               <div className="flex items-center justify-between">
                 <span className="font-label-md text-label-md text-on-surface-variant truncate font-medium">
                   Sets Created
                 </span>
-                <div className="w-7 h-7 rounded-lg bg-surface-container flex items-center justify-center text-primary">
+                <div className="neu-icon neu-icon--sm text-primary">
                   <span className="material-symbols-outlined text-[18px]">
                     folder_special
                   </span>
@@ -89,12 +91,12 @@ export default function DashboardPage() {
             </div>
 
             {/* Quizzes Taken */}
-            <div className="bg-surface-container-lowest rounded-xl p-space-sm shadow-sm flex flex-col justify-between h-24">
+            <div className="glass glass-lift p-4 flex flex-col justify-between h-28 rise" style={{ "--i": 2 }}>
               <div className="flex items-center justify-between">
                 <span className="font-label-md text-label-md text-on-surface-variant truncate font-medium">
                   Quizzes Taken
                 </span>
-                <div className="w-7 h-7 rounded-lg bg-secondary-fixed flex items-center justify-center text-secondary">
+                <div className="neu-icon neu-icon--sm text-secondary">
                   <span
                     className="material-symbols-outlined text-[18px]"
                     style={{ fontVariationSettings: "'FILL' 1" }}
@@ -114,12 +116,12 @@ export default function DashboardPage() {
             </div>
 
             {/* Average Score */}
-            <div className="bg-surface-container-lowest rounded-xl p-space-sm shadow-sm flex flex-col justify-between h-24">
+            <div className="glass glass-lift p-4 flex flex-col justify-between h-28 rise" style={{ "--i": 3 }}>
               <div className="flex items-center justify-between">
                 <span className="font-label-md text-label-md text-on-surface-variant truncate font-medium">
                   Avg Score
                 </span>
-                <div className="w-7 h-7 rounded-lg bg-tertiary-fixed flex items-center justify-center text-on-tertiary-fixed-variant">
+                <div className="neu-icon neu-icon--sm text-on-tertiary-fixed-variant">
                   <span className="material-symbols-outlined text-[18px]">
                     insights
                   </span>
@@ -136,12 +138,12 @@ export default function DashboardPage() {
             </div>
 
             {/* Study Streak */}
-            <div className="bg-surface-container-lowest rounded-xl p-space-sm shadow-sm flex flex-col justify-between h-24">
+            <div className="glass glass-lift p-4 flex flex-col justify-between h-28 rise" style={{ "--i": 4 }}>
               <div className="flex items-center justify-between">
                 <span className="font-label-md text-label-md text-on-surface-variant truncate font-medium">
                   Study Streak
                 </span>
-                <div className="w-7 h-7 rounded-lg bg-tertiary-fixed flex items-center justify-center text-tertiary-container">
+                <div className="neu-icon neu-icon--sm text-tertiary-container">
                   <span
                     className="material-symbols-outlined text-[18px]"
                     style={{ fontVariationSettings: "'FILL' 1" }}
@@ -162,8 +164,8 @@ export default function DashboardPage() {
           </section>
 
           {/* Pro Tip Box */}
-          <section className="bg-surface-container rounded-xl p-space-sm flex items-start gap-space-sm shadow-sm">
-            <div className="w-8 h-8 rounded-full bg-surface-container-lowest flex items-center justify-center flex-shrink-0 text-on-tertiary-container shadow-xs">
+          <section className="glass glass--soft p-4 flex items-start gap-space-sm lg:col-span-6 lg:order-4">
+            <div className="neu-icon neu-icon--round neu-icon--sm !text-tertiary-container">
               <span
                 className="material-symbols-outlined text-[18px]"
                 style={{ fontVariationSettings: "'FILL' 1" }}
@@ -182,7 +184,7 @@ export default function DashboardPage() {
           </section>
 
           {/* Recent Study Sets List */}
-          <section aria-label="Recent Sets" className="flex flex-col space-y-space-sm">
+          <section aria-label="Recent Sets" className="flex flex-col gap-4 lg:col-span-12 lg:order-3">
             <div className="flex items-center justify-between pt-1">
               <h2 className="font-headline-sm text-headline-sm text-primary font-bold">
                 Recent Study Sets
@@ -198,15 +200,17 @@ export default function DashboardPage() {
               </button>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+
             {/* Set Card 1: Number System */}
-            <Card className="flex flex-col space-y-space-sm">
+            <Card className="flex flex-col gap-space-sm">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 rounded-full bg-surface-container text-secondary font-label-sm text-label-sm font-semibold">
+                    <span className="pill pill--accent px-2.5 py-0.5 font-label-sm text-label-sm font-semibold">
                       Mathematics
                     </span>
-                    <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-primary font-label-sm text-label-sm flex items-center gap-1">
+                    <span className="pill px-2.5 py-0.5 text-primary font-label-sm text-label-sm">
                       <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>
                       Ready
                     </span>
@@ -224,7 +228,7 @@ export default function DashboardPage() {
                 </div>
                 <button
                   aria-label="More options"
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:bg-surface-container transition-colors"
+                  className="neu-icon neu-icon--round neu-icon--sm !text-outline"
                   type="button"
                 >
                   <span className="material-symbols-outlined text-[20px]">
@@ -246,7 +250,10 @@ export default function DashboardPage() {
                 </Button>
                 <Button
                   to="/quiz"
-                  onClick={loadDemoSet}
+                  onClick={() => {
+                    loadDemoSet();
+                    startQuiz();
+                  }}
                   variant="primary"
                   size="sm"
                   icon="play_arrow"
@@ -257,14 +264,14 @@ export default function DashboardPage() {
             </Card>
 
             {/* Set Card 2: Algebra Basics */}
-            <Card className="flex flex-col space-y-space-sm">
+            <Card className="flex flex-col gap-space-sm">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 rounded-full bg-surface-container text-secondary font-label-sm text-label-sm font-semibold">
+                    <span className="pill pill--accent px-2.5 py-0.5 font-label-sm text-label-sm font-semibold">
                       Mathematics
                     </span>
-                    <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-primary font-label-sm text-label-sm flex items-center gap-1">
+                    <span className="pill px-2.5 py-0.5 text-primary font-label-sm text-label-sm">
                       <span
                         className="material-symbols-outlined text-[12px] text-secondary"
                         style={{ fontVariationSettings: "'FILL' 1" }}
@@ -287,7 +294,7 @@ export default function DashboardPage() {
                 </div>
                 <button
                   aria-label="More options"
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:bg-surface-container transition-colors"
+                  className="neu-icon neu-icon--round neu-icon--sm !text-outline"
                   type="button"
                 >
                   <span className="material-symbols-outlined text-[20px]">
@@ -319,14 +326,14 @@ export default function DashboardPage() {
             </Card>
 
             {/* Set Card 3: Trigonometry */}
-            <Card className="flex flex-col space-y-space-sm">
+            <Card className="flex flex-col gap-space-sm">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 rounded-full bg-surface-container text-secondary font-label-sm text-label-sm font-semibold">
+                    <span className="pill pill--accent px-2.5 py-0.5 font-label-sm text-label-sm font-semibold">
                       Mathematics
                     </span>
-                    <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-tertiary-container font-label-sm text-label-sm flex items-center gap-1">
+                    <span className="pill pill--gold px-2.5 py-0.5 font-label-sm text-label-sm">
                       <span className="w-1.5 h-1.5 rounded-full bg-on-tertiary-container"></span>
                       In Progress
                     </span>
@@ -344,7 +351,7 @@ export default function DashboardPage() {
                 </div>
                 <button
                   aria-label="More options"
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:bg-surface-container transition-colors"
+                  className="neu-icon neu-icon--round neu-icon--sm !text-outline"
                   type="button"
                 >
                   <span className="material-symbols-outlined text-[20px]">
@@ -354,8 +361,8 @@ export default function DashboardPage() {
               </div>
 
               {/* Progress bar */}
-              <div className="w-full bg-surface-container rounded-full h-1.5 overflow-hidden">
-                <div className="bg-secondary h-full rounded-full w-[45%]"></div>
+              <div className="progress-track" role="progressbar" aria-label="Trigonometry progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={45}>
+                <div className="progress-fill" style={{ width: '45%' }}></div>
               </div>
 
               {/* Action Row */}
@@ -378,10 +385,11 @@ export default function DashboardPage() {
                 </Button>
               </div>
             </Card>
+            </div>
           </section>
 
           {/* Quick Peer Motivation Snippet */}
-          <section className="bg-surface-container-lowest rounded-xl p-space-md shadow-sm flex items-center justify-between">
+          <section className="glass glass-lift p-4 flex items-center justify-between lg:col-span-6 lg:order-5">
             <div className="flex items-center gap-space-sm">
               <div className="flex -space-x-2 overflow-hidden">
                 <span className="inline-block h-8 w-8 rounded-full ring-2 ring-surface-container-lowest bg-surface-variant flex items-center justify-center text-primary font-label-sm text-label-sm font-semibold">
