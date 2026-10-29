@@ -82,7 +82,7 @@ Groq is mocked in the tests, so they use no quota and need no key.
 - Photos: JPG, PNG or WebP, up to 3 per request. HEIC is not supported.
 - Material over the character limit is rejected with the numbers, never silently cut.
 - Groq free plans have small per-minute token limits. The server waits and retries once for short limits, and tells you how long to wait for long ones.
-- The Dashboard's stats and set cards are demo content for now. Only the Number System card opens a real sample set.
+- Dashboard quiz stats (quizzes taken, average and best score, study streak) are real. They are computed from the quizzes you finish and kept in this browser's local storage, one record per attempt, so a refresh or a reopened score page never counts twice. "Sets Created" and the recent set cards are still demo content, and only the Number System card opens a real sample set.
 
 ## Project layout
 

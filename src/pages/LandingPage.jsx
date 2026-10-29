@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import Button from '../components/Button';
 import Card from '../components/Card';
+import Logo from '../components/Logo';
 
 export default function LandingPage() {
   const [isFlipped, setIsFlipped] = useState(false);
@@ -231,10 +232,9 @@ export default function LandingPage() {
           </section>
 
           {/* Footer */}
-          <footer className="flex flex-col items-center justify-center text-center gap-space-xs">
+          <footer className="flex flex-col items-center justify-center text-center gap-space-md">
+            <Logo size="lg" />
             <div className="flex flex-wrap items-center justify-center gap-space-xs text-on-surface-variant font-label-md text-label-md">
-              <span className="font-bold text-primary">StudySaathi AI</span>
-              <span aria-hidden="true">•</span>
               <span className="flex items-center gap-1">
                 Built with{' '}
                 <span

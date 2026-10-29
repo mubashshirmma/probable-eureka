@@ -2,10 +2,15 @@
 // they can be unit tested. Progress belongs to one study session (sessionId);
 // progress saved for another session is ignored.
 
+import { newAttemptId } from './quizHistory';
+
 export const QUIZ_STORAGE_KEY = 'studysaathi.quizProgress';
 
+// attemptId identifies one attempt at the quiz. It is kept in the saved progress, so a refresh
+// does not make a new attempt, and it is replaced only when the quiz is restarted.
 export const emptyQuizState = (sessionId) => ({
   sessionId,
+  attemptId: newAttemptId(),
   answers: {},
   submitted: false,
   currentIndex: 0,
@@ -46,6 +51,7 @@ export function loadQuizState(storage, sessionId, questions) {
     const index = Number.isInteger(saved.currentIndex) ? saved.currentIndex : 0;
     return {
       sessionId,
+      attemptId: typeof saved.attemptId === 'string' && saved.attemptId ? saved.attemptId : newAttemptId(),
       answers,
       // "Submitted" is only believed when every question really has an answer.
       submitted: saved.submitted === true && allAnswered,

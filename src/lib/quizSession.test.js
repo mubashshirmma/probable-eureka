@@ -9,6 +9,8 @@ import {
   scoreQuiz,
 } from './quizSession';
 
+const fresh = (sessionId) => ({ sessionId, attemptId: expect.any(String), answers: {}, submitted: false, currentIndex: 0 });
+
 const questions = [1, 2, 3, 4].map((id) => ({
   id,
   question: 'Q' + id,
@@ -46,30 +48,31 @@ describe('save / load', () => {
   beforeEach(() => sessionStorage.clear());
 
   it('restores answers, position and submitted state for the same session', () => {
-    const state = { sessionId: 's1', answers: { 1: 1, 2: 0, 3: 3, 4: 2 }, submitted: true, currentIndex: 3 };
+    const state = { sessionId: 's1', attemptId: 'attempt-1', answers: { 1: 1, 2: 0, 3: 3, 4: 2 }, submitted: true, currentIndex: 3 };
     saveQuizState(sessionStorage, state);
     expect(loadQuizState(sessionStorage, 's1', questions)).toEqual(state);
   });
 
   it('ignores progress saved for a different session', () => {
     saveQuizState(sessionStorage, { sessionId: 'old', answers: { 1: 1 }, submitted: false, currentIndex: 2 });
-    expect(loadQuizState(sessionStorage, 'new', questions)).toEqual(emptyQuizState('new'));
+    expect(loadQuizState(sessionStorage, 'new', questions)).toEqual(fresh('new'));
   });
 
   it('falls back to an empty state for missing, malformed or wrong-shaped data', () => {
-    expect(loadQuizState(sessionStorage, 's1', questions)).toEqual(emptyQuizState('s1'));
+    expect(loadQuizState(sessionStorage, 's1', questions)).toEqual(fresh('s1'));
     sessionStorage.setItem(QUIZ_STORAGE_KEY, '{not json');
-    expect(loadQuizState(sessionStorage, 's1', questions)).toEqual(emptyQuizState('s1'));
+    expect(loadQuizState(sessionStorage, 's1', questions)).toEqual(fresh('s1'));
     sessionStorage.setItem(QUIZ_STORAGE_KEY, '"a string"');
-    expect(loadQuizState(sessionStorage, 's1', questions)).toEqual(emptyQuizState('s1'));
+    expect(loadQuizState(sessionStorage, 's1', questions)).toEqual(fresh('s1'));
     sessionStorage.setItem(QUIZ_STORAGE_KEY, 'null');
-    expect(loadQuizState(sessionStorage, 's1', questions)).toEqual(emptyQuizState('s1'));
+    expect(loadQuizState(sessionStorage, 's1', questions)).toEqual(fresh('s1'));
   });
 
   it('cleans outdated answers (questions that no longer exist) and clamps the position', () => {
     saveQuizState(sessionStorage, { sessionId: 's1', answers: { 1: 1, 77: 2 }, submitted: false, currentIndex: 50 });
     expect(loadQuizState(sessionStorage, 's1', questions)).toEqual({
       sessionId: 's1',
+      attemptId: expect.any(String),
       answers: { 1: 1 },
       submitted: false,
       currentIndex: 3,
@@ -81,6 +84,12 @@ describe('save / load', () => {
   it('does not believe "submitted" unless every question has an answer', () => {
     saveQuizState(sessionStorage, { sessionId: 's1', answers: { 1: 1 }, submitted: true, currentIndex: 0 });
     expect(loadQuizState(sessionStorage, 's1', questions).submitted).toBe(false);
+  });
+
+  it('keeps the same attempt id across a refresh, and gives each new quiz state its own', () => {
+    saveQuizState(sessionStorage, { sessionId: 's1', attemptId: 'attempt-42', answers: { 1: 1 }, submitted: false, currentIndex: 1 });
+    expect(loadQuizState(sessionStorage, 's1', questions).attemptId).toBe('attempt-42');
+    expect(emptyQuizState('s1').attemptId).not.toBe(emptyQuizState('s1').attemptId);
   });
 
   it('clearQuizState removes saved progress', () => {
@@ -97,6 +106,6 @@ describe('save / load', () => {
     };
     expect(() => saveQuizState(broken, emptyQuizState('s1'))).not.toThrow();
     expect(() => clearQuizState(broken)).not.toThrow();
-    expect(loadQuizState(broken, 's1', questions)).toEqual(emptyQuizState('s1'));
+    expect(loadQuizState(broken, 's1', questions)).toEqual(fresh('s1'));
   });
 });

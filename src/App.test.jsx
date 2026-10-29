@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import App from './App';
 import { studySetData } from './data/sampleData';
 
@@ -88,6 +88,7 @@ const answerAll = (label, picks) => {
 
 beforeEach(() => {
   sessionStorage.clear();
+  localStorage.clear();
   window.history.pushState({}, '', '/');
   vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('unexpected fetch'))));
 });
@@ -448,5 +449,165 @@ describe('photo uploads', () => {
     await waitFor(() => expect(screen.getByText(/looks like a scan/)).toBeTruthy());
     expect(screen.getByText('scan.pdf')).toBeTruthy();
     expect(window.location.pathname).toBe('/create');
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe('dashboard quiz statistics', () => {
+  const HISTORY_KEY = 'studysaathi.quizHistory';
+
+  // The dashboard tiles: value and unit, e.g. { value: '1', unit: 'Quiz' }.
+  const tile = (label) => {
+    const heading = [...document.querySelectorAll('section[aria-label="Learning Metrics"] span')].find(
+      (e) => e.textContent.trim() === label
+    );
+    const box = heading.closest('.glass');
+    const valueEl = box.querySelector('.tabular-nums');
+    return {
+      value: valueEl.textContent.trim(),
+      unit: valueEl.nextElementSibling?.textContent.trim() ?? '',
+      text: box.textContent,
+    };
+  };
+  const goTo = (path) => fireEvent.click(document.querySelector(`nav[aria-label="Main navigation"] a[href="${path}"]`));
+  const stored = () => JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+
+  it('starts at zero: no made-up numbers', () => {
+    openApp('/dashboard');
+    expect(tile('Quizzes Taken')).toMatchObject({ value: '0', unit: 'Quizzes' });
+    expect(tile('Avg Score').value).toBe('—');
+    expect(tile('Avg Score').text).not.toMatch(/Best|Top 10/);
+    expect(tile('Study Streak')).toMatchObject({ value: '0', unit: 'Days' });
+    expect(document.body.textContent).not.toMatch(/\b12 Quizzes|84%/);
+  });
+
+  it('counts a finished quiz immediately, keeps the count on refresh, and never counts the score page twice', () => {
+    seedSet(makeSet('Alpha'));
+    let view = openApp('/dashboard');
+    expect(tile('Quizzes Taken').value).toBe('0');
+
+    // take the quiz (all three right) from inside the app, without a page reload
+    goTo('/quiz');
+    expect(window.location.pathname).toBe('/quiz');
+    answerAll('Alpha', [0, 1, 2]);
+    expect(window.location.pathname).toBe('/score');
+    expect(stored()).toHaveLength(1);
+
+    // back on the dashboard: updated at once
+    clickButton(/Back to Dashboard/);
+    expect(window.location.pathname).toBe('/dashboard');
+    expect(tile('Quizzes Taken')).toMatchObject({ value: '1', unit: 'Quiz' });
+    expect(tile('Avg Score').value).toBe('100%');
+    expect(tile('Avg Score').text).toMatch(/Best 100%/);
+    expect(tile('Study Streak').value).toBe('1');
+    expect(tile('Study Streak').unit).toMatch(/^Day\b/);
+
+    // refresh the dashboard: still 1
+    view = refresh(view);
+    expect(tile('Quizzes Taken').value).toBe('1');
+
+    // reopen and refresh the score page several times: still 1
+    for (let i = 0; i < 3; i++) {
+      view.unmount();
+      cleanup();
+      view = openApp('/score');
+      expect(screen.getByText(/Quiz Completed/)).toBeTruthy();
+    }
+    expect(stored()).toHaveLength(1);
+    view.unmount();
+    cleanup();
+    openApp('/dashboard');
+    expect(tile('Quizzes Taken').value).toBe('1');
+  });
+
+  it('a retake is a second quiz; resubmitting the same attempt is not', () => {
+    seedSet(makeSet('Alpha'));
+    openApp('/quiz');
+    answerAll('Alpha', [0, 1, 2]); // 3 of 3
+    clickButton(/Retake Quiz/);
+    answerAll('Alpha', [3, 3, 3]); // 0 of 3, a new attempt
+    expect(stored()).toHaveLength(2);
+
+    // go back into the finished quiz and change the last answer, then submit again: same attempt
+    clickButton(/Back to Dashboard/);
+    goTo('/quiz');
+    clickOption('Alpha', 3, 2); // question 3 is now right
+    clickButton(/Submit Quiz/);
+    expect(stored()).toHaveLength(2);
+    expect(stored().map((e) => e.correct).sort()).toEqual([1, 3]);
+
+    clickButton(/Back to Dashboard/);
+    expect(tile('Quizzes Taken')).toMatchObject({ value: '2', unit: 'Quizzes' });
+    expect(tile('Avg Score').value).toBe('67%'); // (100 + 33) / 2
+    expect(tile('Avg Score').text).toMatch(/Best 100%/);
+  });
+
+  it('the count survives a new study set and a new browser tab (it is stored on the device)', () => {
+    seedSet(makeSet('Alpha'));
+    openApp('/quiz');
+    answerAll('Alpha', [0, 1, 2]);
+    cleanup();
+
+    sessionStorage.clear(); // a new tab: no current set, no quiz progress
+    openApp('/dashboard');
+    expect(tile('Quizzes Taken').value).toBe('1');
+    cleanup();
+
+    seedSet(makeSet('Beta'), 'ai', 'another-session');
+    openApp('/quiz');
+    answerAll('Beta', [0, 1, 2]);
+    cleanup();
+    openApp('/dashboard');
+    expect(tile('Quizzes Taken').value).toBe('2');
+  });
+
+  it('records the finished quiz with its real score and title', () => {
+    seedSet(makeSet('Alpha'));
+    openApp('/quiz');
+    answerAll('Alpha', [0, 1, 0]); // q3 wrong
+    expect(stored()[0]).toMatchObject({ title: 'Alpha Title', correct: 2, total: 3, percent: 67, source: 'ai' });
+  });
+
+  it('an unfinished quiz is not counted', () => {
+    seedSet(makeSet('Alpha'));
+    openApp('/quiz');
+    clickOption('Alpha', 1, 0);
+    clickButton(/Next Question/);
+    clickOption('Alpha', 2, 1);
+    cleanup();
+    openApp('/dashboard');
+    expect(tile('Quizzes Taken').value).toBe('0');
+    expect(stored()).toHaveLength(0);
+  });
+
+  it('a generated-but-not-taken set is not counted', async () => {
+    fetch.mockImplementation(() => jsonResponse(makeSet('Gen')));
+    openApp('/create');
+    fireEvent.change(screen.getByPlaceholderText(/Type or paste concepts/), { target: { value: 'notes' } });
+    clickButton(/Generate Study Materials/);
+    await waitFor(() => expect(window.location.pathname).toBe('/results'));
+    cleanup();
+    openApp('/dashboard');
+    expect(tile('Quizzes Taken').value).toBe('0');
+  });
+
+  it('copes with a damaged saved history', () => {
+    localStorage.setItem(HISTORY_KEY, '{{{ not json');
+    openApp('/dashboard');
+    expect(tile('Quizzes Taken').value).toBe('0');
+  });
+
+  it('updates when another tab finishes a quiz (storage event)', () => {
+    openApp('/dashboard');
+    expect(tile('Quizzes Taken').value).toBe('0');
+    localStorage.setItem(
+      HISTORY_KEY,
+      JSON.stringify([{ attemptId: 'other-tab', sessionId: 's', title: 'X', source: 'ai', correct: 2, total: 4, percent: 50, completedAt: new Date().toISOString() }])
+    );
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: HISTORY_KEY }));
+    });
+    expect(tile('Quizzes Taken').value).toBe('1');
+    expect(tile('Avg Score').value).toBe('50%');
   });
 });

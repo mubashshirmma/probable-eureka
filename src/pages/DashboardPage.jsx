@@ -6,11 +6,14 @@ import Button from '../components/Button';
 import Card from '../components/Card';
 import { useStudySet } from '../context/StudySetContext';
 import { useQuiz } from '../context/QuizContext';
+import { summarizeHistory } from '../lib/quizHistory';
 import { studySetData } from '../data/sampleData';
 
 export default function DashboardPage() {
   const { setStudySet } = useStudySet();
-  const { startQuiz } = useQuiz();
+  const { startQuiz, history } = useQuiz();
+  // Quiz statistics come from the quizzes the student has actually finished.
+  const stats = summarizeHistory(history);
   // The Number System card is a built-in demo set, loaded only when the student opens it.
   const loadDemoSet = () => setStudySet(studySetData, 'demo');
 
@@ -67,7 +70,7 @@ export default function DashboardPage() {
           </section>
 
           {/* Metric Badges & Learning Highlights Grid */}
-          <section aria-label="Learning Metrics" className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:col-span-12 lg:order-2">
+          <section aria-label="Learning Metrics" aria-live="polite" className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:col-span-12 lg:order-2">
             {/* Sets Created */}
             <div className="glass glass-lift p-4 flex flex-col justify-between h-28 rise" style={{ "--i": 1 }}>
               <div className="flex items-center justify-between">
@@ -106,11 +109,11 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="flex items-baseline gap-1">
-                <span className="font-headline-md-mobile text-headline-md-mobile text-primary font-bold">
-                  12
+                <span className="font-headline-md-mobile text-headline-md-mobile text-primary font-bold tabular-nums">
+                  {stats.count}
                 </span>
                 <span className="font-body-sm text-body-sm text-on-surface-variant">
-                  Quizzes
+                  {stats.count === 1 ? 'Quiz' : 'Quizzes'}
                 </span>
               </div>
             </div>
@@ -128,12 +131,14 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <span className="font-headline-md-mobile text-headline-md-mobile text-primary font-bold">
-                  84%
+                <span className="font-headline-md-mobile text-headline-md-mobile text-primary font-bold tabular-nums">
+                  {stats.average === null ? '—' : `${stats.average}%`}
                 </span>
-                <span className="px-1.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-label-sm text-label-sm flex items-center font-bold">
-                  Top 10%
-                </span>
+                {stats.best !== null && (
+                  <span className="pill pill--gold px-2 py-0.5 font-label-sm text-label-sm font-bold">
+                    Best {stats.best}%
+                  </span>
+                )}
               </div>
             </div>
 
@@ -153,11 +158,11 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="flex items-baseline gap-1">
-                <span className="font-headline-md-mobile text-headline-md-mobile text-primary font-bold">
-                  5
+                <span className="font-headline-md-mobile text-headline-md-mobile text-primary font-bold tabular-nums">
+                  {stats.streak}
                 </span>
                 <span className="font-body-sm text-body-sm text-on-surface-variant">
-                  Days 🔥
+                  {stats.streak === 1 ? 'Day' : 'Days'}{stats.streak > 0 ? ' 🔥' : ''}
                 </span>
               </div>
             </div>

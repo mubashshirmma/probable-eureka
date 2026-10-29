@@ -1,6 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useStudySet } from './StudySetContext';
 import {
+  HISTORY_KEY,
+  buildEntry,
+  loadHistory,
+  newAttemptId,
+  saveHistory,
+  upsertAttempt,
+} from '../lib/quizHistory';
+import {
   clearQuizState,
   emptyQuizState,
   loadQuizState,
@@ -11,7 +19,7 @@ import {
 const QuizContext = createContext();
 
 export function QuizProvider({ children }) {
-  const { studySet, sessionId } = useStudySet();
+  const { studySet, sessionId, source } = useStudySet();
   const questions = useMemo(() => studySet?.quiz?.questions || [], [studySet]);
 
   // Progress is tagged with the sessionId it belongs to. If the study session
@@ -29,6 +37,18 @@ export function QuizProvider({ children }) {
     },
     [sessionId]
   );
+
+  // Finished quizzes. The dashboard reads this; it is saved so the count survives refreshes and new visits.
+  const [history, setHistory] = useState(() => loadHistory(localStorage));
+
+  // Keep other open tabs in step.
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key === HISTORY_KEY || event.key === null) setHistory(loadHistory(localStorage));
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   // Save progress whenever it changes.
   useEffect(() => {
@@ -48,7 +68,26 @@ export function QuizProvider({ children }) {
 
   const resetQuiz = () => {
     clearQuizState(sessionStorage);
-    update(() => ({ answers: {}, submitted: false, currentIndex: 0 }));
+    // A restarted quiz is a new attempt, so it can be counted on its own.
+    update(() => ({ attemptId: newAttemptId(), answers: {}, submitted: false, currentIndex: 0 }));
+  };
+
+  // Submit the quiz: mark it finished and record it. Recorded by attempt id, so submitting the same
+  // attempt again, refreshing, or reopening the score page can never add a second entry.
+  const completeQuiz = () => {
+    if (questions.length === 0) return;
+    const entry = buildEntry({
+      attemptId: state.attemptId,
+      sessionId,
+      title: studySet?.topicTitle,
+      source,
+      questions,
+      answers: state.answers,
+    });
+    const next = upsertAttempt(history, entry);
+    setHistory(next);
+    saveHistory(localStorage, next);
+    update(() => ({ submitted: true }));
   };
 
   // Entry point for "Start Quiz": continue an unfinished attempt, or begin a new one after a finished attempt.
@@ -63,6 +102,8 @@ export function QuizProvider({ children }) {
         setAnswer,
         resetQuiz,
         startQuiz,
+        completeQuiz,
+        history,
         quizSubmitted: state.submitted,
         setQuizSubmitted,
         currentIndex: state.currentIndex,

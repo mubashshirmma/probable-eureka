@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import LogoMark from './LogoMark';
+import Logo from './Logo';
 
 // Same destinations as the bottom bar, so desktop and mobile always agree.
 export const NAV_ITEMS = [
@@ -18,17 +18,15 @@ export default function Navbar({ subtitle = 'Home' }) {
     <header className="fixed top-0 inset-x-0 z-50 pt-safe">
       <div className="mx-auto max-w-7xl px-3 sm:px-5 pt-2">
         <div className="glass glass--strong h-14 sm:h-16 px-3 sm:px-4 flex items-center justify-between gap-space-sm !rounded-2xl">
-          <Link to="/" className="flex items-center gap-space-sm min-w-0 text-inherit no-underline rounded-xl">
-            <LogoMark className="h-9 w-9 flex-shrink-0" />
-            <div className="flex flex-col min-w-0 leading-tight">
-              <span className="font-headline-sm text-headline-sm text-primary tracking-tight truncate font-bold">
-                StudySaathi
-              </span>
-              <span className="font-label-sm text-label-sm text-on-surface-variant truncate uppercase tracking-wider">
-                {subtitle}
-              </span>
-            </div>
-          </Link>
+          <div className="flex items-center gap-3 min-w-0">
+            <Link to="/" className="flex items-center rounded-lg text-inherit no-underline">
+              <Logo size="sm" className="sh-logo--nav" />
+            </Link>
+            <span className="hidden sm:block h-5 w-px bg-outline-variant" aria-hidden="true" />
+            <span className="hidden sm:block font-label-sm text-label-sm text-on-surface-variant truncate uppercase tracking-wider leading-none">
+              {subtitle}
+            </span>
+          </div>
 
           <div className="flex items-center gap-space-sm">
             {/* Desktop navigation. On phones the bottom bar does this job. */}

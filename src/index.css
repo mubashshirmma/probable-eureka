@@ -777,3 +777,77 @@ a.neu-icon:active {
     transform: translateX(260%);
   }
 }
+
+/* ==========================================================================
+   Logo: solid emblem with a cut-out flame, plus wordmark. No plate, no shadow.
+   Built in em units, so changing font-size (or the size prop) scales everything.
+   ========================================================================== */
+.sh-logo {
+  --logo-fg: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  line-height: 1;
+  color: var(--logo-fg);
+  white-space: nowrap;
+  user-select: none;
+}
+.sh-logo--dark {
+  --logo-fg: #fff;
+}
+.sh-logo--xs { font-size: 11px; }
+.sh-logo--sm { font-size: 13px; }
+.sh-logo--md { font-size: 16px; }
+.sh-logo--lg { font-size: 26px; }
+.sh-logo--xl { font-size: 44px; }
+.sh-logo--fluid { font-size: clamp(14px, 2.2vw + 6px, 40px); }
+
+/* Header-sized logo: compact on phones, a touch larger from tablet width up */
+.sh-logo--nav { font-size: 14px; }
+@media (min-width: 640px) {
+  .sh-logo--nav { font-size: 16px; }
+}
+
+.sh-logo__emblem {
+  display: block;
+  width: 2.1em;
+  height: 2.1em;
+  flex-shrink: 0;
+  overflow: visible;
+  color: var(--logo-fg);
+  transition:
+    transform 0.35s var(--ease),
+    filter 0.35s var(--ease);
+}
+.sh-logo__word {
+  font-size: 1.3em;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* Hover: the emblem lifts a little and gains a soft shadow. Nothing glows permanently. */
+a:hover > .sh-logo .sh-logo__emblem,
+a:focus-visible > .sh-logo .sh-logo__emblem,
+.sh-logo:hover .sh-logo__emblem {
+  transform: translateY(-1px) scale(1.07) rotate(-4deg);
+  filter: drop-shadow(0 3px 5px rgba(22, 20, 58, 0.22));
+}
+
+/* Idle motion: the flame outline morphs in SVG (see Logo.jsx); only the spark is animated here. The circle and the wordmark never move. */
+.sh-logo__flame,
+.sh-logo__core,
+.sh-logo__spark {
+  transform-box: fill-box;
+}
+.sh-logo.is-animated .sh-logo__spark {
+  transform-origin: 50% 50%;
+  animation: sh-spark 3.8s ease-in-out infinite;
+}
+
+@keyframes sh-spark {
+  0%   { transform: translateY(2px) scale(0.5); opacity: 0; }
+  30%  { opacity: 1; }
+  65%  { transform: translateY(-2px) scale(1); opacity: 1; }
+  100% { transform: translateY(-4px) scale(0.6); opacity: 0; }
+}

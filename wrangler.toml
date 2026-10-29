@@ -1,0 +1,11 @@
+name = "studysaathi-ai"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "./dist"
+
+# Non-secret settings. The key is a secret, so set it with:
+#   npx wrangler pages secret put GROQ_API_KEY --project-name studysaathi-ai
+[vars]
+GROQ_MODEL = "openai/gpt-oss-120b"
+GROQ_VISION_MODEL = "qwen/qwen3.8-27b"
+GROQ_MAX_INPUT_CHARS = "20000"

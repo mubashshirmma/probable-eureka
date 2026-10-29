@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import LogoMark from './LogoMark';
+import Logo from './Logo';
 
 // Slim glass header for focused screens (quiz, score): back control, logo, title, one action on the right.
 export default function FocusHeader({ title, backTo, onBack, backLabel = 'Go back', action }) {
@@ -20,7 +20,8 @@ export default function FocusHeader({ title, backTo, onBack, backLabel = 'Go bac
                 {backIcon}
               </button>
             )}
-            <LogoMark className="h-8 w-8 flex-shrink-0 hidden sm:block" />
+            <Logo size="sm" showName={false} className="sm:hidden" />
+            <Logo size="sm" className="hidden sm:inline-flex" />
             <h1 className="font-headline-sm text-headline-sm text-primary tracking-tight truncate font-bold">{title}</h1>
           </div>
           {action}

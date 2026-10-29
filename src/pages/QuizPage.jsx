@@ -8,7 +8,7 @@ import FocusHeader from '../components/FocusHeader';
 
 export default function QuizPage() {
   const navigate = useNavigate();
-  const { questions, studentAnswers, setAnswer, setQuizSubmitted, currentIndex, setCurrentIndex } = useQuiz();
+  const { questions, studentAnswers, setAnswer, completeQuiz, currentIndex, setCurrentIndex } = useQuiz();
 
   const { studySet } = useStudySet();
 
@@ -54,7 +54,7 @@ export default function QuizPage() {
     if (!isSelected) return;
 
     if (isLastQuestion) {
-      setQuizSubmitted(true);
+      completeQuiz();
       navigate('/score');
     } else {
       setCurrentIndex((prev) => prev + 1);
